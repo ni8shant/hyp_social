@@ -27,11 +27,13 @@ export default function TopBar({
         {/* Search bar */}
         {showSearch && (
           <div className="flex-1 relative">
+            <label htmlFor="topbar-search" className="sr-only">Search friends</label>
             <Search
               size={16}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]"
             />
             <input
+              id="topbar-search"
               type="text"
               placeholder="search @your_friends"
               className="w-full pl-9 pr-4 py-2 bg-[#F3F4F6] rounded-full text-sm text-[#111827] placeholder-[#6B7280] outline-none focus:ring-2 focus:ring-[#2563EB]/30 transition-all"
@@ -46,13 +48,13 @@ export default function TopBar({
 
         {/* Notification icon */}
         {showNotification && (
-          <Link href="/notifications" className="relative flex-shrink-0">
+          <Link href="/notifications" className="relative flex-shrink-0" aria-label="Notifications">
             <Bell
               size={22}
               className="text-[#374151] hover:text-[#2563EB] transition-colors"
             />
             {/* Unread badge */}
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#EF4444]" />
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#EF4444]" aria-hidden="true" />
           </Link>
         )}
       </div>

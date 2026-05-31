@@ -142,6 +142,7 @@ export default function SignupPage() {
 
           {/* Full Name */}
           <div className="relative">
+            <label htmlFor="signup-fullname" className="sr-only">Full Name</label>
             <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
             <input
               id="signup-fullname"
@@ -157,6 +158,7 @@ export default function SignupPage() {
 
           {/* Username */}
           <div className="relative">
+            <label htmlFor="signup-username" className="sr-only">Username</label>
             <AtSign size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
             <input
               id="signup-username"
@@ -172,6 +174,7 @@ export default function SignupPage() {
 
           {/* Email */}
           <div className="relative">
+            <label htmlFor="signup-email" className="sr-only">Email address</label>
             <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
             <input
               id="signup-email"
@@ -187,6 +190,7 @@ export default function SignupPage() {
 
           {/* Date of Birth */}
           <div className="relative">
+            <label htmlFor="signup-dob" className="sr-only">Date of Birth</label>
             <Calendar size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
             <input
               id="signup-dob"
@@ -202,6 +206,7 @@ export default function SignupPage() {
           {/* Password */}
           <div>
             <div className="relative">
+              <label htmlFor="signup-password" className="sr-only">Password</label>
               <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
               <input
                 id="signup-password"
@@ -239,6 +244,7 @@ export default function SignupPage() {
 
           {/* Confirm Password */}
           <div className="relative">
+            <label htmlFor="signup-confirm-password" className="sr-only">Confirm Password</label>
             <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
             <input
               id="signup-confirm-password"

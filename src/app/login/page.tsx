@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Mail, Lock, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, AlertCircle, Terminal } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [devLoading, setDevLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,6 +37,72 @@ export default function LoginPage() {
       setErrorMsg(err.message || "Invalid email or password");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDevLogin = async () => {
+    setErrorMsg("");
+    setLoading(true);
+    setDevLoading(true);
+
+    const supabase = createClient();
+    const devEmail = "dev@hyp.social";
+    const devPassword = "developer_password_123";
+
+    try {
+      // 1. Try to sign in first
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: devEmail,
+        password: devPassword,
+      });
+
+      if (signInError) {
+        // 2. If sign in fails (e.g. user does not exist), automatically sign up
+        const { error: signUpError, data: signUpData } = await supabase.auth.signUp({
+          email: devEmail,
+          password: devPassword,
+          options: {
+            data: {
+              username: "developer",
+              full_name: "Developer Admin",
+              dob: "2000-01-01",
+            },
+          },
+        });
+
+        if (signUpError) {
+          throw signUpError;
+        }
+
+        // 3. Retry sign in
+        const { error: retryError } = await supabase.auth.signInWithPassword({
+          email: devEmail,
+          password: devPassword,
+        });
+
+        if (retryError) {
+          throw retryError;
+        }
+
+        // Populate birth date in profiles table if needed
+        if (signUpData?.user) {
+          try {
+            await supabase
+              .from("profiles")
+              .update({ dob: "2000-01-01" })
+              .eq("id", signUpData.user.id);
+          } catch (err) {
+            console.warn("Profiles seed warning:", err);
+          }
+        }
+      }
+
+      router.push("/home");
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to log in as developer");
+    } finally {
+      setLoading(false);
+      setDevLoading(false);
     }
   };
 
@@ -64,6 +131,7 @@ export default function LoginPage() {
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           {/* Email */}
           <div className="relative">
+            <label htmlFor="login-email" className="sr-only">Email address</label>
             <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
             <input
               id="login-email"
@@ -78,6 +146,7 @@ export default function LoginPage() {
 
           {/* Password */}
           <div className="relative">
+            <label htmlFor="login-password" className="sr-only">Password</label>
             <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
             <input
               id="login-password"
@@ -112,13 +181,34 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full py-3 bg-[#2563EB] hover:bg-[#1D4ED8] active:scale-[0.98] text-white font-semibold rounded-xl transition-all duration-200 mt-1 shadow-md shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {loading ? (
+            {loading && !devLoading ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Logging In...
               </>
             ) : (
               "Log In"
+            )}
+          </button>
+
+          {/* Developer Login button */}
+          <button
+            id="dev-login-submit"
+            type="button"
+            disabled={loading}
+            onClick={handleDevLogin}
+            className="w-full py-3 bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-[#2563EB] font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+          >
+            {devLoading ? (
+              <>
+                <div className="w-5 h-5 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin" />
+                Logging in as Dev...
+              </>
+            ) : (
+              <>
+                <Terminal size={16} />
+                Developer Login (Bypass Signup)
+              </>
             )}
           </button>
 
@@ -156,3 +246,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

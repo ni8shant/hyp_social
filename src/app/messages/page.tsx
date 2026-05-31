@@ -66,6 +66,7 @@ export default function MessagesPage() {
 
         {/* Search */}
         <div className="relative mb-5">
+          <label htmlFor="message-search" className="sr-only">Search messages</label>
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
           <input
             id="message-search"

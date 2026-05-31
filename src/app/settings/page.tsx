@@ -33,14 +33,12 @@ function Toggle({ id, checked, onChange }: ToggleProps) {
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className={`w-11 h-6 rounded-full transition-all duration-300 relative flex-shrink-0 ${
-        checked ? "bg-[#2563EB]" : "bg-[#D1D5DB]"
-      }`}
+      className={`w-11 h-6 rounded-full transition-all duration-300 relative flex-shrink-0 ${checked ? "bg-[#2563EB]" : "bg-[#D1D5DB]"
+        }`}
     >
       <span
-        className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-300 ${
-          checked ? "left-5" : "left-0.5"
-        }`}
+        className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-300 ${checked ? "left-5" : "left-0.5"
+          }`}
       />
     </button>
   );
@@ -165,15 +163,13 @@ export default function SettingsPage() {
                 {section.items.map((item, idx) => (
                   <div
                     key={item.id}
-                    className={`flex items-center justify-between px-4 py-3.5 ${
-                      idx < section.items.length - 1 ? "border-b border-[#F9FAFB]" : ""
-                    }`}
+                    className={`flex items-center justify-between px-4 py-3.5 ${idx < section.items.length - 1 ? "border-b border-[#F9FAFB]" : ""
+                      }`}
                   >
                     <div className="flex-1 min-w-0 mr-4">
                       <p
-                        className={`text-sm font-medium ${
-                          item.type === "danger" ? "text-[#EF4444]" : "text-[#111827]"
-                        }`}
+                        className={`text-sm font-medium ${item.type === "danger" ? "text-[#EF4444]" : "text-[#111827]"
+                          }`}
                       >
                         {item.label}
                       </p>

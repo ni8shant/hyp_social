@@ -9,8 +9,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://hyp-social.vercel.app"),
   title: "hyp — Stay connected with real life",
   description: "hyp is a social platform focused on real-life connections — stories, posts, and life updates from the people you care about.",
+  alternates: {
+    canonical: "/",
+  },
   keywords: ["social media", "friends", "family", "life updates", "stories", "posts"],
   openGraph: {
     title: "hyp — Stay connected with real life",

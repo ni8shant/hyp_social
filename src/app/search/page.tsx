@@ -42,6 +42,7 @@ export default function SearchPage() {
 
         {/* Search input */}
         <div className="relative mb-6">
+          <label htmlFor="search-input" className="sr-only">Search friends or name</label>
           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
           <input
             id="search-input"

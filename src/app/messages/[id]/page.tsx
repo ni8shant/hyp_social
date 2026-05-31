@@ -98,6 +98,7 @@ export default function ChatPage() {
             <Paperclip size={20} />
           </button>
           <div className="flex-1 flex items-center bg-[#F3F4F6] rounded-full px-4 py-2.5 gap-2">
+            <label htmlFor="chat-input" className="sr-only">Type a message</label>
             <input
               id="chat-input"
               type="text"

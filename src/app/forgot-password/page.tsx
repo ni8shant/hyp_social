@@ -39,6 +39,7 @@ export default function ForgotPasswordPage() {
               className="flex flex-col gap-4"
             >
               <div className="relative">
+                <label htmlFor="reset-email" className="sr-only">Email address</label>
                 <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
                 <input
                   id="reset-email"
