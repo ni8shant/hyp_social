@@ -1,3 +1,0 @@
-User-agent: *
-Disallow:
-Sitemap: https://hyp-social.vercel.app/sitemap.xml
