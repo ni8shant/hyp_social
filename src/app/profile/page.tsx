@@ -43,10 +43,12 @@ export default function ProfilePage() {
   }, [authLoading, profile, router]);
 
   // Load user data
-  const refreshData = () => {
+  const refreshData = async () => {
     if (profile) {
-      setPosts(getPostsByUser(profile.id));
-      setStories(getStoriesByUser(profile.id));
+      const uPosts = await getPostsByUser(profile.id);
+      const uStories = await getStoriesByUser(profile.id);
+      setPosts(uPosts);
+      setStories(uStories);
     }
   };
 
@@ -80,11 +82,11 @@ export default function ProfilePage() {
     }, 1500);
   };
 
-  const handleAddComment = (e: React.FormEvent, postId: string) => {
+  const handleAddComment = async (e: React.FormEvent, postId: string) => {
     e.preventDefault();
     if (!newComment.trim()) return;
     
-    const updated = addComment(postId, {
+    const updated = await addComment(postId, {
       authorId: profile.id,
       authorUsername: profile.username,
       text: newComment.trim(),
@@ -92,16 +94,16 @@ export default function ProfilePage() {
 
     if (updated) {
       setActivePost(updated);
-      refreshData();
+      await refreshData();
     }
     setNewComment("");
   };
 
-  const handleLikePost = (postId: string) => {
-    const updated = toggleLikePost(postId, profile.id);
+  const handleLikePost = async (postId: string) => {
+    const updated = await toggleLikePost(postId, profile.id);
     if (updated) {
       setActivePost(updated);
-      refreshData();
+      await refreshData();
     }
   };
 

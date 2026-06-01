@@ -49,9 +49,7 @@ const mockRooms: TalkieRoom[] = [
   }
 ];
 
-const onlineFriends = [
-  { name: "Hyp Assistant ✨", color: "from-[#7C3AED] to-[#2563EB]", dp: "H" },
-];
+const onlineFriends: any[] = [];
 
 export default function GroupsPage() {
   const [showCreate, setShowCreate] = useState(false);

@@ -52,9 +52,11 @@ export default function HomePage() {
   }, [authLoading, profile, router]);
 
   // Load stories data
-  const refreshData = () => {
-    setStories(getAllStories());
-    setStoryAuthors(getUniqueStoryAuthors());
+  const refreshData = async () => {
+    const activeStories = await getAllStories();
+    const authors = await getUniqueStoryAuthors();
+    setStories(activeStories);
+    setStoryAuthors(authors);
   };
 
   useEffect(() => {
@@ -150,10 +152,10 @@ export default function HomePage() {
     }
   };
 
-  const handlePublishStory = () => {
+  const handlePublishStory = async () => {
     if (!storyText.trim() && !storyImagePreview) return;
 
-    createStory({
+    await createStory({
       authorId: profile.id,
       authorUsername: profile.username,
       authorInitial: profile.avatarInitial,
@@ -165,7 +167,7 @@ export default function HomePage() {
     setStoryText("");
     setStoryImagePreview(null);
     setShowStoryCreator(false);
-    refreshData();
+    await refreshData();
   };
 
   const handleMyStoryClick = () => {
@@ -182,10 +184,12 @@ export default function HomePage() {
       {/* Top navigation */}
       <TopBar />
 
-      <div className="pb-24 pt-4 max-w-2xl mx-auto">
-        {/* Top Profile Cards block */}
-        <div className="bg-[#E5E7EB] border border-[#CBD5E1] rounded-3xl p-5 mb-6 mx-4 flex justify-around items-center shadow-sm">
-          {/* Your Story */}
+      {/* Main Container */}
+      <div className="pb-24 pt-4 max-w-3xl mx-auto">
+        
+        {/* Top Profile Cards block - Centered and rounded container matching sketch */}
+        <div className="bg-[#E5E7EB] border border-[#CBD5E1] rounded-3xl p-5 mb-8 mx-4 flex justify-around items-center shadow-sm">
+          {/* Your Story Circle */}
           <button
             onClick={handleMyStoryClick}
             className="flex flex-col items-center gap-2 group cursor-pointer"
@@ -194,42 +198,41 @@ export default function HomePage() {
             <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white font-bold group-hover:scale-105 transition-transform duration-200 ${
               hasMyStory
                 ? "bg-gradient-to-br from-[#7C3AED] to-pink-500 border-2 border-white ring-2 ring-[#7C3AED]/40"
-                : "bg-[#D1D5DB] border-2 border-dashed border-[#9CA3AF]"
+                : "bg-[#DDD6FE] border-2 border-solid border-[#A78BFA] text-[#6D28D9] flex items-center justify-center"
             }`}>
               {hasMyStory ? (
                 <span className="text-lg font-extrabold">{profile.avatarInitial}</span>
               ) : (
-                <Plus size={24} className="text-[#4B5563]" />
+                <Plus size={24} className="text-[#6D28D9]" />
               )}
             </div>
-            <span className="text-xs font-semibold text-[#374151]">
-              {hasMyStory ? "Your Story" : "Add Story"}
-            </span>
+            <span className="text-xs font-bold text-[#374151]">@your_story</span>
           </button>
 
-          {/* Your Posts */}
+          {/* Your Posts Circle */}
           <button
             onClick={() => setActiveTab("post")}
             className="flex flex-col items-center gap-2 group cursor-pointer"
             aria-label="View your posts"
           >
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#2563EB] to-[#818CF8] flex items-center justify-center text-white font-bold text-xl group-hover:scale-105 transition-transform duration-200">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#818CF8] to-[#6366F1] flex items-center justify-center text-white font-bold text-xl group-hover:scale-105 transition-transform duration-200">
               {profile.avatarInitial}
             </div>
-            <span className="text-xs font-semibold text-[#374151]">@{profile.username}</span>
+            <span className="text-xs font-bold text-[#374151]">@your_posts</span>
           </button>
         </div>
 
-        {/* Responsive layout container */}
-        <div className="px-4 md:flex md:gap-8 md:items-start">
-          
-          {/* Tab switcher */}
-          <div className="flex gap-4 mb-6 md:flex-col md:w-32 md:mb-0 md:sticky md:top-24 md:gap-4 flex-shrink-0">
+        {/* ──────────────────────────────────────────────────────── */}
+        {/* 1. MOBILE INTERFACE (md:hidden) */}
+        {/* ──────────────────────────────────────────────────────── */}
+        <div className="md:hidden px-4">
+          {/* Side-by-side Tab switcher */}
+          <div className="flex gap-4 mb-6">
             <button
               onClick={() => setActiveTab("story")}
-              className={`flex-1 md:flex-initial py-3 px-6 rounded-2xl text-sm font-bold shadow-sm transition-all duration-200 cursor-pointer text-center ${
+              className={`flex-1 py-3 px-6 rounded-2xl text-sm font-bold shadow-sm transition-all duration-200 cursor-pointer text-center ${
                 activeTab === "story"
-                  ? "bg-[#2563EB] text-white"
+                  ? "bg-[#7C3AED] text-white"
                   : "bg-[#E5E7EB] text-[#475569] hover:bg-[#D1D5DB]"
               }`}
             >
@@ -237,9 +240,9 @@ export default function HomePage() {
             </button>
             <button
               onClick={() => setActiveTab("post")}
-              className={`flex-1 md:flex-initial py-3 px-6 rounded-2xl text-sm font-bold shadow-sm transition-all duration-200 cursor-pointer text-center ${
+              className={`flex-1 py-3 px-6 rounded-2xl text-sm font-bold shadow-sm transition-all duration-200 cursor-pointer text-center ${
                 activeTab === "post"
-                  ? "bg-[#2563EB] text-white"
+                  ? "bg-[#7C3AED] text-white"
                   : "bg-[#E5E7EB] text-[#475569] hover:bg-[#D1D5DB]"
               }`}
             >
@@ -247,33 +250,34 @@ export default function HomePage() {
             </button>
           </div>
 
-          {/* Content Area */}
-          <div className="flex-1 min-w-0">
+          {/* Mobile Content Area */}
+          <div className="min-w-0">
             {activeTab === "story" ? (
               <div className="slide-up">
                 {otherAuthors.length === 0 && !hasMyStory ? (
                   <div className="text-center py-12">
-                    <div className="w-20 h-20 rounded-full bg-blue-50 text-[#2563EB] flex items-center justify-center mx-auto mb-4">
+                    <div className="w-20 h-20 rounded-full bg-purple-50 text-[#7C3AED] flex items-center justify-center mx-auto mb-4">
                       <Camera size={32} />
                     </div>
                     <h3 className="text-lg font-bold text-[#111827] mb-2">No stories yet</h3>
                     <p className="text-sm text-[#6B7280] mb-4">Be the first to share a story!</p>
                     <button
                       onClick={() => setShowStoryCreator(true)}
-                      className="px-6 py-3 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-sm font-semibold rounded-2xl transition-all shadow-md shadow-blue-200 cursor-pointer"
+                      className="px-6 py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-sm font-semibold rounded-2xl transition-all shadow-md shadow-purple-200 cursor-pointer"
                     >
                       Create Story
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-3 md:grid-cols-4 gap-y-6 gap-x-4 max-w-md md:max-w-none mx-auto">
+                  /* Grid of circles (3 in a row wrapping) matching sketch */
+                  <div className="grid grid-cols-3 gap-y-8 gap-x-4 max-w-sm mx-auto">
                     {/* Add Story button */}
                     <button
                       onClick={() => setShowStoryCreator(true)}
                       className="flex flex-col items-center gap-2 group cursor-pointer"
                     >
-                      <div className="w-14 h-14 rounded-full border-2 border-dashed border-[#9CA3AF] flex items-center justify-center hover:border-[#2563EB] hover:bg-blue-50 transition-all">
-                        <Plus size={20} className="text-[#9CA3AF] group-hover:text-[#2563EB]" />
+                      <div className="w-14 h-14 rounded-full border-2 border-dashed border-[#A78BFA] bg-purple-50 flex items-center justify-center hover:bg-purple-100 transition-all">
+                        <Plus size={20} className="text-[#7C3AED]" />
                       </div>
                       <span className="text-[11px] text-[#475569] font-semibold">Add Story</span>
                     </button>
@@ -309,12 +313,169 @@ export default function HomePage() {
                 )}
               </div>
             ) : (
-              <div className="max-w-md md:max-w-xl mx-auto slide-up">
+              <div className="max-w-md mx-auto slide-up">
                 <PostFeed />
               </div>
             )}
           </div>
         </div>
+
+        {/* ──────────────────────────────────────────────────────── */}
+        {/* 2. LAPTOP/WEB INTERFACE (hidden md:block) */}
+        {/* ──────────────────────────────────────────────────────── */}
+        <div className="hidden md:block px-6">
+          <div className="flex flex-col gap-6">
+            
+            {/* Story Row: Tab pill on the left, 4 circles next to it */}
+            <div className="flex items-center gap-6">
+              <button
+                onClick={() => setActiveTab("story")}
+                className={`w-32 py-3 px-6 rounded-2xl text-sm font-bold shadow-sm transition-all duration-200 cursor-pointer text-center ${
+                  activeTab === "story"
+                    ? "bg-[#7C3AED] text-white"
+                    : "bg-[#E5E7EB] text-[#475569] hover:bg-[#D1D5DB]"
+                }`}
+              >
+                Story
+              </button>
+              
+              {/* Row of up to 4 circular avatars */}
+              <div className="flex items-center gap-5 flex-1 overflow-x-auto no-scrollbar py-1">
+                {/* Add Story pill */}
+                <button
+                  onClick={() => setShowStoryCreator(true)}
+                  className="flex flex-col items-center gap-2 group cursor-pointer flex-shrink-0"
+                >
+                  <div className="w-14 h-14 rounded-full border-2 border-dashed border-[#A78BFA] bg-purple-50 flex items-center justify-center hover:bg-purple-100 transition-all">
+                    <Plus size={20} className="text-[#7C3AED]" />
+                  </div>
+                  <span className="text-[10px] text-[#475569] font-semibold">Add Story</span>
+                </button>
+
+                {otherAuthors.slice(0, 4).map((author, index) => {
+                  const authorStories = stories.filter((s) => s.authorId === author.authorId);
+                  const latestStory = authorStories[0];
+                  return (
+                    <button
+                      key={author.authorId}
+                      onClick={() => latestStory && handleSelectStory(latestStory.id)}
+                      className="flex flex-col items-center gap-2 group cursor-pointer flex-shrink-0"
+                      aria-label={`View ${author.authorUsername}'s story`}
+                    >
+                      <div className="p-[2px] rounded-full story-ring">
+                        <div className="story-ring-inner">
+                          <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg overflow-hidden
+                            ${avatarColors[index % avatarColors.length]}
+                            group-hover:scale-105 transition-transform duration-200`}
+                          >
+                            <span className="text-sm font-bold">{author.authorInitial}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-[#475569] font-semibold truncate max-w-[70px]">
+                        @{author.authorUsername}
+                      </span>
+                    </button>
+                  );
+                })}
+                {otherAuthors.length === 0 && (
+                  <span className="text-xs text-slate-400 italic">No stories active. Click Add to share!</span>
+                )}
+              </div>
+            </div>
+
+            {/* Post Row: Tab pill on the left, 2 circles next to it */}
+            <div className="flex items-center gap-6">
+              <button
+                onClick={() => setActiveTab("post")}
+                className={`w-32 py-3 px-6 rounded-2xl text-sm font-bold shadow-sm transition-all duration-200 cursor-pointer text-center ${
+                  activeTab === "post"
+                    ? "bg-[#7C3AED] text-white"
+                    : "bg-[#E5E7EB] text-[#475569] hover:bg-[#D1D5DB]"
+                }`}
+              >
+                Post
+              </button>
+
+              {/* Row of up to 2 circular avatars */}
+              <div className="flex items-center gap-5 flex-1 py-1">
+                {otherAuthors.slice(4, 6).map((author, index) => {
+                  const authorStories = stories.filter((s) => s.authorId === author.authorId);
+                  const latestStory = authorStories[0];
+                  return (
+                    <button
+                      key={author.authorId}
+                      onClick={() => latestStory && handleSelectStory(latestStory.id)}
+                      className="flex flex-col items-center gap-2 group cursor-pointer flex-shrink-0"
+                      aria-label={`View ${author.authorUsername}'s story`}
+                    >
+                      <div className="p-[2px] rounded-full story-ring">
+                        <div className="story-ring-inner">
+                          <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg overflow-hidden
+                            ${avatarColors[(index + 4) % avatarColors.length]}
+                            group-hover:scale-105 transition-transform duration-200`}
+                          >
+                            <span className="text-sm font-bold">{author.authorInitial}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-[#475569] font-semibold truncate max-w-[70px]">
+                        @{author.authorUsername}
+                      </span>
+                    </button>
+                  );
+                })}
+                {/* Fallback to show additional stories or user posts profiles */}
+                {otherAuthors.length <= 4 && otherAuthors.slice(0, 2).map((author, index) => {
+                  const authorStories = stories.filter((s) => s.authorId === author.authorId);
+                  const latestStory = authorStories[0];
+                  return (
+                    <button
+                      key={`fallback_${author.authorId}`}
+                      onClick={() => latestStory && handleSelectStory(latestStory.id)}
+                      className="flex flex-col items-center gap-2 group cursor-pointer flex-shrink-0 opacity-80"
+                      aria-label={`View ${author.authorUsername}'s story`}
+                    >
+                      <div className="p-[2px] rounded-full story-ring">
+                        <div className="story-ring-inner">
+                          <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg overflow-hidden
+                            ${avatarColors[(index + 2) % avatarColors.length]}
+                            group-hover:scale-105 transition-transform duration-200`}
+                          >
+                            <span className="text-sm font-bold">{author.authorInitial}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-[#475569] font-semibold truncate max-w-[70px]">
+                        @{author.authorUsername}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Laptop Timeline Feed */}
+            {activeTab === "post" ? (
+              <div className="mt-8 max-w-xl mx-auto w-full slide-up">
+                <PostFeed />
+              </div>
+            ) : (
+              <div className="mt-8 text-center bg-white border border-[#CBD5E1] rounded-3xl p-8 max-w-lg mx-auto shadow-sm slide-up">
+                <h4 className="font-bold text-slate-800 text-lg mb-2">Watch Active Stories ✨</h4>
+                <p className="text-sm text-slate-500 mb-4">Click any circle above to watch their story playback popup instantly!</p>
+                <button
+                  onClick={() => setActiveTab("post")}
+                  className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-bold rounded-xl transition-all cursor-pointer"
+                >
+                  View Timeline Feed
+                </button>
+              </div>
+            )}
+
+          </div>
+        </div>
+
       </div>
 
       {/* Story Viewer Modal */}

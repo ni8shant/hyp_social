@@ -323,13 +323,13 @@ export default function CreatePage() {
     (u) => u.label === (showCustomInput ? customUpdateText : selectedUpdate)
   );
 
-  const handleSharePost = () => {
+  const handleSharePost = async () => {
     if (!profile) return;
 
     const updateLabel = showCustomInput ? customUpdateText : selectedUpdate;
     const updateConfig = updateLabel ? LIFE_UPDATE_CONFIGS[updateLabel] : null;
 
-    createPost({
+    await createPost({
       authorId: profile.id,
       authorUsername: profile.username,
       authorDisplayName: profile.fullName,

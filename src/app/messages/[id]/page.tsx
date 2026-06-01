@@ -4,64 +4,182 @@ import { useState, useRef, useEffect } from "react";
 import { ArrowLeft, Send, Paperclip, Smile, Mic, Phone, Video } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/auth-context";
 
 const assistantMessages = [
   { id: "1", from: "them", text: "Hey! Welcome to Hyp! 🚀 I'm your assistant.", time: "Just now" },
-  { id: "2", from: "them", text: "Since you are the first user to register on this deployment, you won't see other active people here yet.", time: "Just now" },
-  { id: "3", from: "them", text: "Invite your friends by sharing your signup link! Let's build your active space together. ✨", time: "Just now" },
-];
-
-const standardMessages = [
-  { id: "1", from: "them", text: "hey! how are you?", time: "10:30 AM" },
-  { id: "2", from: "me", text: "doing good! you?", time: "10:31 AM" },
+  { id: "2", from: "them", text: "Invite your friends by sharing your signup link! Let's build your active space together. ✨", time: "Just now" },
 ];
 
 export default function ChatPage() {
+  const { profile } = useAuth();
   const params = useParams();
   const id = params?.id as string;
   const isAssistant = id === "hyp-assistant" || !id;
 
-  const [messages, setMessages] = useState(isAssistant ? assistantMessages : standardMessages);
+  const [messages, setMessages] = useState<any[]>(isAssistant ? assistantMessages : []);
   const [input, setInput] = useState("");
+  const [contactName, setContactName] = useState(isAssistant ? "Hyp Assistant" : "Loading...");
+  const [contactInitial, setContactInitial] = useState(isAssistant ? "H" : "U");
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Fetch contact user details
+  useEffect(() => {
+    if (isAssistant || !id) return;
+    const fetchContact = async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("profiles")
+        .select("username, full_name")
+        .eq("id", id)
+        .single();
+      if (data) {
+        const name = data.full_name || data.username;
+        setContactName(name);
+        setContactInitial(name[0].toUpperCase());
+      }
+    };
+    fetchContact();
+  }, [id, isAssistant]);
+
+  // Load initial messages from DB
+  const fetchMessages = async () => {
+    if (!profile || isAssistant || !id) return;
+    try {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("messages")
+        .select("*")
+        .or(`and(sender_id.eq.${profile.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${profile.id})`)
+        .order("created_at", { ascending: true });
+
+      setMessages(
+        data?.map((m) => ({
+          id: m.id,
+          from: m.sender_id === profile.id ? "me" : "them",
+          text: m.content || "",
+          time: new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        })) || []
+      );
+    } catch (err) {
+      console.error("Failed to fetch messages:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchMessages();
+  }, [id, profile, isAssistant]);
+
+  // Realtime subscription
+  useEffect(() => {
+    if (!profile || isAssistant || !id) return;
+    const supabase = createClient();
+
+    const channel = supabase
+      .channel(`room_${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        (payload) => {
+          const newMsg = payload.new;
+          if (
+            (newMsg.sender_id === profile.id && newMsg.receiver_id === id) ||
+            (newMsg.sender_id === id && newMsg.receiver_id === profile.id)
+          ) {
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              return [
+                ...prev,
+                {
+                  id: newMsg.id,
+                  from: newMsg.sender_id === profile.id ? "me" : "them",
+                  text: newMsg.content || "",
+                  time: new Date(newMsg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                },
+              ];
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, profile, isAssistant]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
-    
+  const sendMessage = async () => {
+    if (!input.trim() || !profile) return;
+
     const userMsgText = input.trim();
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        from: "me",
-        text: userMsgText,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      },
-    ]);
     setInput("");
 
-    // If talking to Hyp Assistant, trigger a helpful auto-response
     if (isAssistant) {
+      // Offline Assistant replies locally
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          from: "me",
+          text: userMsgText,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        },
+      ]);
       setTimeout(() => {
         setMessages((prev) => [
           ...prev,
           {
             id: `reply_${Date.now()}`,
             from: "them",
-            text: "I'm always here to help! 🚀 Remember to copy the invite link from the messages list and send it to your friends so they can create accounts and chat with you live.",
+            text: "I'm always here to help! 🚀 Invite your real friends so you can chat with them live.",
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          }
+          },
         ]);
-      }, 1200);
+      }, 1000);
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("messages")
+        .insert({
+          sender_id: profile.id,
+          receiver_id: id,
+          content: userMsgText,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update state locally for immediately smooth UI
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === data.id)) return prev;
+        return [
+          ...prev,
+          {
+            id: data.id,
+            from: "me",
+            text: userMsgText,
+            time: new Date(data.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+        ];
+      });
+    } catch (err) {
+      console.error("Failed to send message:", err);
     }
   };
 
-  const contactName = isAssistant ? "Hyp Assistant" : `User @${id}`;
-  const contactInitial = isAssistant ? "H" : (id ? id[0].toUpperCase() : "U");
   const contactColor = isAssistant ? "from-[#7C3AED] to-[#2563EB]" : "from-blue-400 to-blue-600";
 
   return (
@@ -78,7 +196,7 @@ export default function ChatPage() {
           <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#22C55E] border-2 border-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-[#111827] text-sm">{contactName}</p>
+          <p className="font-semibold text-[#111827] text-sm truncate">{contactName}</p>
           <p className="text-xs text-[#22C55E]">Online</p>
         </div>
         <div className="flex items-center gap-2">

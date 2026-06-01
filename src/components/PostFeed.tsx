@@ -21,8 +21,8 @@ function PostCard({ post, currentUserId, currentUsername }: { post: HypPost; cur
   const [shareSuccess, setShareSuccess] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleLike = () => {
-    const updated = toggleLikePost(post.id, currentUserId);
+  const handleLike = async () => {
+    const updated = await toggleLikePost(post.id, currentUserId);
     if (updated) {
       setLiked(updated.likes.includes(currentUserId));
       setLikeCount(updated.likes.length);
@@ -30,7 +30,8 @@ function PostCard({ post, currentUserId, currentUsername }: { post: HypPost; cur
   };
 
   const handleShare = () => {
-    navigator.clipboard.writeText(`https://hyp.social/post/${post.id}`);
+    const domain = typeof window !== "undefined" ? window.location.origin : "https://hyp.social";
+    navigator.clipboard.writeText(`${domain}/post/${post.id}`);
     setShareSuccess(true);
     setTimeout(() => setShareSuccess(false), 2000);
   };
@@ -39,10 +40,10 @@ function PostCard({ post, currentUserId, currentUsername }: { post: HypPost; cur
     inputRef.current?.focus();
   };
 
-  const handlePostComment = (e: React.FormEvent) => {
+  const handlePostComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCommentText.trim()) return;
-    const updated = addComment(post.id, {
+    const updated = await addComment(post.id, {
       authorId: currentUserId,
       authorUsername: currentUsername,
       text: newCommentText.trim(),
@@ -208,8 +209,9 @@ export default function PostFeed() {
   const { profile } = useAuth();
   const [posts, setPosts] = useState<HypPost[]>([]);
 
-  const refreshPosts = () => {
-    setPosts(getAllPosts());
+  const refreshPosts = async () => {
+    const p = await getAllPosts();
+    setPosts(p);
   };
 
   useEffect(() => {

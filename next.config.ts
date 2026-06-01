@@ -5,9 +5,9 @@ const isDev = process.env.NODE_ENV === 'development';
 const cspHeader = `
   default-src 'self';
   script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''};
-  style-src 'self' 'unsafe-inline';
-  img-src 'self' blob: data:;
-  font-src 'self';
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  img-src 'self' blob: data: https://images.unsplash.com;
+  font-src 'self' https://fonts.gstatic.com;
   object-src 'none';
   base-uri 'self';
   form-action 'self';
@@ -53,4 +53,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-

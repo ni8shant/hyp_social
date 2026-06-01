@@ -26,17 +26,13 @@ export default function TopBar({
 
         {/* Search bar */}
         {showSearch && (
-          <div className="flex-1 relative">
+          <div className="flex-1">
             <label htmlFor="topbar-search" className="sr-only">Search friends</label>
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]"
-            />
             <input
               id="topbar-search"
               type="text"
               placeholder="search @your_friends"
-              className="w-full pl-9 pr-4 py-2 bg-[#F3F4F6] rounded-full text-sm text-[#111827] placeholder-[#6B7280] outline-none focus:ring-2 focus:ring-[#2563EB]/30 transition-all"
+              className="w-full px-4 py-2 bg-[#E5E7EB] rounded-full text-sm text-[#111827] placeholder-[#4B5563] text-center outline-none focus:ring-2 focus:ring-[#7C3AED]/30 transition-all font-medium"
             />
           </div>
         )}

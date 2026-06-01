@@ -1,11 +1,4 @@
-/**
- * Unified Data Manager for Hyp Social
- * 
- * Manages all user-generated content (posts, stories, comments, likes)
- * using localStorage persistence so data survives page refreshes.
- * 
- * No dummy/mock data — all content is created by real signed-in users.
- */
+import { createClient } from "@/lib/supabase/client";
 
 export interface HypPost {
   id: string;
@@ -46,165 +39,223 @@ export interface HypStory {
   expiresAt: string; // 24h expiry
 }
 
-const POSTS_KEY = "hyp_posts";
-const STORIES_KEY = "hyp_stories";
-
-const INITIAL_SEED_POSTS: HypPost[] = [
-  {
-    id: "seed_post_1",
-    authorId: "user_priya",
-    authorUsername: "priya_m",
-    authorDisplayName: "Priya Sharma",
-    authorInitial: "P",
-    content: "Got Internship at Google! Super excited for this new chapter! 💻✨",
-    imageUrl: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80",
-    mediaType: "image",
-    postType: "life_update",
-    updateType: "Got Internship",
-    updateEmoji: "📋",
-    updateGradient: "from-[#D97706] to-[#F59E0B]",
-    likes: ["user_rahul", "user_aman"],
-    comments: [
-      {
-        id: "seed_c_1",
-        authorId: "user_rahul",
-        authorUsername: "rahul_k",
-        text: "Wow! Huge congratulations Priya! Well deserved 🎉",
-        createdAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString()
-      },
-      {
-        id: "seed_c_2",
-        authorId: "user_aman",
-        authorUsername: "aman_t",
-        text: "Brilliant! Make us proud! 🚀",
-        createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString()
-      }
-    ],
-    createdAt: new Date(Date.now() - 4 * 3600 * 1000).toISOString()
-  },
-  {
-    id: "seed_post_2",
-    authorId: "user_rahul",
-    authorUsername: "rahul_k",
-    authorDisplayName: "Rahul Kumar",
-    authorInitial: "R",
-    content: "Weekend getaway to the mountains. Absolutely serene! 🏔️🌲 Can't get enough of this view.",
-    imageUrl: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
-    mediaType: "image",
-    postType: "normal",
-    likes: ["user_priya"],
-    comments: [
-      {
-        id: "seed_c_3",
-        authorId: "user_priya",
-        authorUsername: "priya_m",
-        text: "Stunning shot Rahul! Which place is this?",
-        createdAt: new Date(Date.now() - 5 * 3600 * 1000).toISOString()
-      }
-    ],
-    createdAt: new Date(Date.now() - 8 * 3600 * 1000).toISOString()
-  },
-  {
-    id: "seed_post_3",
-    authorId: "user_aman",
-    authorUsername: "aman_t",
-    authorDisplayName: "Aman Tiwari",
-    authorInitial: "A",
-    content: "Started MBA at IIM Ahmedabad! Ready to dive in 📚🎓",
-    imageUrl: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=80",
-    mediaType: "image",
-    postType: "life_update",
-    updateType: "Started MBA",
-    updateEmoji: "📚",
-    updateGradient: "from-[#7C3AED] to-[#4F46E5]",
-    likes: ["user_rahul", "user_priya"],
-    comments: [
-      {
-        id: "seed_c_4",
-        authorId: "user_rahul",
-        authorUsername: "rahul_k",
-        text: "Congratulations Aman! Big moves! 👍",
-        createdAt: new Date(Date.now() - 10 * 3600 * 1000).toISOString()
-      }
-    ],
-    createdAt: new Date(Date.now() - 12 * 3600 * 1000).toISOString()
-  }
-];
-
 // ────────────────────────────────────────────
 // POSTS
 // ────────────────────────────────────────────
 
-export function getAllPosts(): HypPost[] {
+export async function getAllPosts(): Promise<HypPost[]> {
   try {
-    const raw = localStorage.getItem(POSTS_KEY);
-    if (!raw) {
-      // Seed initial posts
-      localStorage.setItem(POSTS_KEY, JSON.stringify(INITIAL_SEED_POSTS));
-      return INITIAL_SEED_POSTS;
-    }
-    const posts: HypPost[] = JSON.parse(raw);
-    // Sort newest first
-    return posts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  } catch {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("posts")
+      .select(`
+        id,
+        user_id,
+        content,
+        media_url,
+        post_type,
+        update_type,
+        visibility,
+        created_at,
+        profiles (
+          username,
+          full_name
+        ),
+        post_likes (
+          user_id
+        ),
+        comments (
+          id,
+          user_id,
+          content,
+          created_at,
+          profiles (
+            username
+          )
+        )
+      `)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map((p: any) => ({
+      id: p.id,
+      authorId: p.user_id,
+      authorUsername: p.profiles?.username || "user",
+      authorDisplayName: p.profiles?.full_name || p.profiles?.username || "User",
+      authorInitial: (p.profiles?.full_name || p.profiles?.username || "U")[0].toUpperCase(),
+      content: p.content || "",
+      imageUrl: p.media_url || undefined,
+      postType: p.post_type as "normal" | "life_update",
+      updateType: p.update_type || undefined,
+      likes: p.post_likes?.map((l: any) => l.user_id) || [],
+      comments: (p.comments || [])
+        .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        .map((c: any) => ({
+          id: c.id,
+          authorId: c.user_id,
+          authorUsername: c.profiles?.username || "user",
+          text: c.content,
+          createdAt: c.created_at,
+        })),
+      createdAt: p.created_at,
+    }));
+  } catch (err) {
+    console.error("Error in getAllPosts:", err);
     return [];
   }
 }
 
-export function createPost(post: Omit<HypPost, "id" | "likes" | "comments" | "createdAt">): HypPost {
-  const newPost: HypPost = {
-    ...post,
-    id: `post_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    likes: [],
-    comments: [],
-    createdAt: new Date().toISOString(),
-  };
+export async function createPost(post: Omit<HypPost, "id" | "likes" | "comments" | "createdAt">): Promise<HypPost | null> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("posts")
+      .insert({
+        user_id: post.authorId,
+        content: post.content,
+        media_url: post.imageUrl || null,
+        post_type: post.postType,
+        update_type: post.updateType || null,
+        visibility: "public"
+      })
+      .select(`
+        id,
+        user_id,
+        content,
+        media_url,
+        post_type,
+        update_type,
+        created_at,
+        profiles (
+          username,
+          full_name
+        )
+      `)
+      .single();
 
-  const posts = getAllPosts();
-  posts.unshift(newPost);
-  localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
-  
-  // Dispatch custom event to notify other components
-  window.dispatchEvent(new CustomEvent("hyp_data_change", { detail: { type: "post" } }));
-  
-  return newPost;
-}
+    if (error) throw error;
 
-export function toggleLikePost(postId: string, userId: string): HypPost | null {
-  const posts = getAllPosts();
-  const post = posts.find((p) => p.id === postId);
-  if (!post) return null;
+    const newPost: HypPost = {
+      id: data.id,
+      authorId: data.user_id,
+      authorUsername: data.profiles?.username || "user",
+      authorDisplayName: data.profiles?.full_name || data.profiles?.username || "User",
+      authorInitial: (data.profiles?.full_name || data.profiles?.username || "U")[0].toUpperCase(),
+      content: data.content || "",
+      imageUrl: data.media_url || undefined,
+      postType: data.post_type as "normal" | "life_update",
+      updateType: data.update_type || undefined,
+      likes: [],
+      comments: [],
+      createdAt: data.created_at,
+    };
 
-  const idx = post.likes.indexOf(userId);
-  if (idx >= 0) {
-    post.likes.splice(idx, 1);
-  } else {
-    post.likes.push(userId);
+    window.dispatchEvent(new CustomEvent("hyp_data_change", { detail: { type: "post" } }));
+    return newPost;
+  } catch (err) {
+    console.error("Error in createPost:", err);
+    return null;
   }
-
-  localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
-  window.dispatchEvent(new CustomEvent("hyp_data_change", { detail: { type: "post" } }));
-  return post;
 }
 
-export function addComment(postId: string, comment: Omit<HypComment, "id" | "createdAt">): HypPost | null {
-  const posts = getAllPosts();
-  const post = posts.find((p) => p.id === postId);
-  if (!post) return null;
+export async function toggleLikePost(postId: string, userId: string): Promise<HypPost | null> {
+  try {
+    const supabase = createClient();
+    
+    // Check if liked
+    const { data: existing } = await supabase
+      .from("post_likes")
+      .select("*")
+      .eq("post_id", postId)
+      .eq("user_id", userId);
 
-  post.comments.push({
-    ...comment,
-    id: `cmt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    createdAt: new Date().toISOString(),
-  });
+    if (existing && existing.length > 0) {
+      // Unlike
+      await supabase
+        .from("post_likes")
+        .delete()
+        .eq("post_id", postId)
+        .eq("user_id", userId);
+    } else {
+      // Like
+      await supabase
+        .from("post_likes")
+        .insert({ post_id: postId, user_id: userId });
 
-  localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
-  window.dispatchEvent(new CustomEvent("hyp_data_change", { detail: { type: "post" } }));
-  return post;
+      // Create notification
+      const { data: postData } = await supabase
+        .from("posts")
+        .select("user_id")
+        .eq("id", postId)
+        .single();
+
+      if (postData && postData.user_id !== userId) {
+        await supabase.from("notifications").insert({
+          user_id: postData.user_id,
+          actor_id: userId,
+          type: "like",
+          post_id: postId,
+        });
+      }
+    }
+
+    // Return the updated post
+    const allPosts = await getAllPosts();
+    const updated = allPosts.find((p) => p.id === postId) || null;
+    
+    window.dispatchEvent(new CustomEvent("hyp_data_change", { detail: { type: "post" } }));
+    return updated;
+  } catch (err) {
+    console.error("Error in toggleLikePost:", err);
+    return null;
+  }
 }
 
-export function getPostsByUser(userId: string): HypPost[] {
-  return getAllPosts().filter((p) => p.authorId === userId);
+export async function addComment(postId: string, comment: Omit<HypComment, "id" | "createdAt">): Promise<HypPost | null> {
+  try {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("comments")
+      .insert({
+        post_id: postId,
+        user_id: comment.authorId,
+        content: comment.text,
+      });
+
+    if (error) throw error;
+
+    // Create notification
+    const { data: postData } = await supabase
+      .from("posts")
+      .select("user_id")
+      .eq("id", postId)
+      .single();
+
+    if (postData && postData.user_id !== comment.authorId) {
+      await supabase.from("notifications").insert({
+        user_id: postData.user_id,
+        actor_id: comment.authorId,
+        type: "comment",
+        post_id: postId,
+      });
+    }
+
+    // Return the updated post
+    const allPosts = await getAllPosts();
+    const updated = allPosts.find((p) => p.id === postId) || null;
+
+    window.dispatchEvent(new CustomEvent("hyp_data_change", { detail: { type: "post" } }));
+    return updated;
+  } catch (err) {
+    console.error("Error in addComment:", err);
+    return null;
+  }
+}
+
+export async function getPostsByUser(userId: string): Promise<HypPost[]> {
+  const posts = await getAllPosts();
+  return posts.filter((p) => p.authorId === userId);
 }
 
 // ────────────────────────────────────────────
@@ -221,54 +272,103 @@ const STORY_BG_GRADIENTS = [
   "from-[#0891B2] to-[#06B6D4]",
 ];
 
-export function getAllStories(): HypStory[] {
+export async function getAllStories(): Promise<HypStory[]> {
   try {
-    const raw = localStorage.getItem(STORIES_KEY);
-    if (!raw) {
-      localStorage.setItem(STORIES_KEY, JSON.stringify([]));
-      return [];
-    }
-    const stories: HypStory[] = JSON.parse(raw);
-    const now = new Date().getTime();
-    // Filter out expired stories (24h)
-    const active = stories.filter((s) => new Date(s.expiresAt).getTime() > now);
-    // If some expired, save cleaned list
-    if (active.length !== stories.length) {
-      localStorage.setItem(STORIES_KEY, JSON.stringify(active));
-    }
-    return active.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  } catch {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("stories")
+      .select(`
+        id,
+        user_id,
+        media_url,
+        text_content,
+        bg_color,
+        created_at,
+        expires_at,
+        profiles (
+          username,
+          full_name
+        )
+      `)
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map((s: any) => ({
+      id: s.id,
+      authorId: s.user_id,
+      authorUsername: s.profiles?.username || "user",
+      authorInitial: (s.profiles?.full_name || s.profiles?.username || "U")[0].toUpperCase(),
+      text: s.text_content || undefined,
+      imageUrl: s.media_url || undefined,
+      bg: s.bg_color || "from-[#2563EB] to-[#60A5FA]",
+      createdAt: s.created_at,
+      expiresAt: s.expires_at,
+    }));
+  } catch (err) {
+    console.error("Error in getAllStories:", err);
     return [];
   }
 }
 
-export function createStory(story: Omit<HypStory, "id" | "createdAt" | "expiresAt" | "bg">): HypStory {
-  const now = new Date();
-  const expires = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24h
+export async function createStory(story: Omit<HypStory, "id" | "createdAt" | "expiresAt" | "bg">): Promise<HypStory | null> {
+  try {
+    const supabase = createClient();
+    const bg = STORY_BG_GRADIENTS[Math.floor(Math.random() * STORY_BG_GRADIENTS.length)];
+    const { data, error } = await supabase
+      .from("stories")
+      .insert({
+        user_id: story.authorId,
+        media_url: story.imageUrl || null,
+        text_content: story.text || null,
+        bg_color: bg,
+        visibility: "followers"
+      })
+      .select(`
+        id,
+        user_id,
+        media_url,
+        text_content,
+        bg_color,
+        created_at,
+        expires_at,
+        profiles (
+          username,
+          full_name
+        )
+      `)
+      .single();
 
-  const newStory: HypStory = {
-    ...story,
-    id: `story_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    bg: STORY_BG_GRADIENTS[Math.floor(Math.random() * STORY_BG_GRADIENTS.length)],
-    createdAt: now.toISOString(),
-    expiresAt: expires.toISOString(),
-  };
+    if (error) throw error;
 
-  const stories = getAllStories();
-  stories.unshift(newStory);
-  localStorage.setItem(STORIES_KEY, JSON.stringify(stories));
-  
-  window.dispatchEvent(new CustomEvent("hyp_data_change", { detail: { type: "story" } }));
-  
-  return newStory;
+    const newStory: HypStory = {
+      id: data.id,
+      authorId: data.user_id,
+      authorUsername: data.profiles?.username || "user",
+      authorInitial: (data.profiles?.full_name || data.profiles?.username || "U")[0].toUpperCase(),
+      text: data.text_content || undefined,
+      imageUrl: data.media_url || undefined,
+      bg: data.bg_color,
+      createdAt: data.created_at,
+      expiresAt: data.expires_at,
+    };
+
+    window.dispatchEvent(new CustomEvent("hyp_data_change", { detail: { type: "story" } }));
+    return newStory;
+  } catch (err) {
+    console.error("Error in createStory:", err);
+    return null;
+  }
 }
 
-export function getStoriesByUser(userId: string): HypStory[] {
-  return getAllStories().filter((s) => s.authorId === userId);
+export async function getStoriesByUser(userId: string): Promise<HypStory[]> {
+  const stories = await getAllStories();
+  return stories.filter((s) => s.authorId === userId);
 }
 
-export function getUniqueStoryAuthors(): { authorId: string; authorUsername: string; authorInitial: string; latestBg: string; hasStory: boolean }[] {
-  const stories = getAllStories();
+export async function getUniqueStoryAuthors(): Promise<{ authorId: string; authorUsername: string; authorInitial: string; latestBg: string; hasStory: boolean }[]> {
+  const stories = await getAllStories();
   const authorMap = new Map<string, { authorId: string; authorUsername: string; authorInitial: string; latestBg: string }>();
 
   for (const s of stories) {

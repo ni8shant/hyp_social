@@ -47,8 +47,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         setUser(session.user);
         buildProfile(session.user);
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     // Listen for auth changes
@@ -59,62 +60,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setUser(null);
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const buildProfile = (u: User) => {
-    const meta = u.user_metadata || {};
-    const username = meta.username || u.email?.split("@")[0] || "user";
-    const fullName = meta.full_name || username;
-    const dob = meta.dob || "";
-    
-    // Check localStorage for profile overrides (edit profile saves here)
-    const localOverrides = getLocalProfileOverrides(u.id);
-
-    const prof: UserProfile = {
-      id: u.id,
-      email: u.email || "",
-      username: localOverrides.username || username,
-      fullName: localOverrides.fullName || fullName,
-      dob: localOverrides.dob || dob,
-      about: localOverrides.about || meta.about || "Hey, I'm on hyp! ✨",
-      avatarInitial: (localOverrides.fullName || fullName)[0]?.toUpperCase() || "U",
-    };
-    setProfile(prof);
-  };
-
-  const getLocalProfileOverrides = (userId: string): Partial<UserProfile> => {
+  const buildProfile = async (u: User) => {
     try {
-      const stored = localStorage.getItem(`hyp_profile_${userId}`);
-      return stored ? JSON.parse(stored) : {};
-    } catch {
-      return {};
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", u.id)
+        .single();
+
+      const meta = u.user_metadata || {};
+      const username = data?.username || meta.username || u.email?.split("@")[0] || "user";
+      const fullName = data?.full_name || meta.full_name || username;
+      const dob = data?.dob || meta.dob || "";
+      const bio = data?.bio || meta.bio || "Hey, I'm on hyp! ✨";
+
+      const prof: UserProfile = {
+        id: u.id,
+        email: u.email || "",
+        username,
+        fullName,
+        dob,
+        about: bio,
+        avatarInitial: fullName[0]?.toUpperCase() || "U",
+      };
+      setProfile(prof);
+    } catch (err) {
+      console.error("Failed to build profile", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const updateProfile = (updates: Partial<Pick<UserProfile, "fullName" | "dob" | "about">>) => {
+  const updateProfile = async (updates: Partial<Pick<UserProfile, "fullName" | "dob" | "about">>) => {
     if (!profile || !user) return;
 
-    const updated: UserProfile = {
-      ...profile,
-      ...updates,
-      avatarInitial: (updates.fullName || profile.fullName)[0]?.toUpperCase() || profile.avatarInitial,
-    };
-    setProfile(updated);
-
-    // Persist to localStorage
     try {
-      const existing = getLocalProfileOverrides(user.id);
-      localStorage.setItem(`hyp_profile_${user.id}`, JSON.stringify({
-        ...existing,
-        ...updates,
-      }));
-    } catch {
-      // localStorage might be unavailable
+      const supabase = createClient();
+      const dbUpdates: any = {};
+      if (updates.fullName !== undefined) dbUpdates.full_name = updates.fullName;
+      if (updates.dob !== undefined) dbUpdates.dob = updates.dob || null;
+      if (updates.about !== undefined) dbUpdates.bio = updates.about;
+
+      const { error } = await supabase
+        .from("profiles")
+        .update(dbUpdates)
+        .eq("id", user.id);
+
+      if (!error) {
+        const updated: UserProfile = {
+          ...profile,
+          ...updates,
+          avatarInitial: (updates.fullName || profile.fullName)[0]?.toUpperCase() || profile.avatarInitial,
+        };
+        setProfile(updated);
+      } else {
+        console.error("Error updating profile in DB:", error);
+      }
+    } catch (err) {
+      console.error("Failed to update profile", err);
     }
   };
 
@@ -131,3 +142,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
+
