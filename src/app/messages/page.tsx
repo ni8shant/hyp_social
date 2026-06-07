@@ -53,7 +53,7 @@ export default function MessagesPage() {
         const userMap = new Map<string, any>();
         
         for (const msg of (data || [])) {
-          const otherUser = msg.sender_id === profile.id ? msg.receiver : msg.sender;
+          const otherUser: any = msg.sender_id === profile.id ? msg.receiver : msg.sender;
           if (!otherUser) continue;
 
           if (!userMap.has(otherUser.id)) {
