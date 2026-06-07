@@ -67,6 +67,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Periodically update last_seen activity timestamp
+  useEffect(() => {
+    if (!user || !profile) return;
+    const supabase = createClient();
+
+    const updateActivity = async () => {
+      try {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("show_last_seen")
+          .eq("id", user.id)
+          .single();
+
+        if (prof?.show_last_seen !== false) {
+          await supabase
+            .from("profiles")
+            .update({ last_seen: new Date().toISOString() })
+            .eq("id", user.id);
+        }
+      } catch (err) {
+        console.warn("Could not update activity timestamp", err);
+      }
+    };
+
+    updateActivity();
+    const interval = setInterval(updateActivity, 30000);
+    return () => clearInterval(interval);
+  }, [user, profile]);
+
   const buildProfile = async (u: User) => {
     try {
       const supabase = createClient();

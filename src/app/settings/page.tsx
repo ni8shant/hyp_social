@@ -15,10 +15,12 @@ import {
   Globe,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import TopBar from "@/components/TopBar";
 import BottomNav from "@/components/BottomNav";
+import { useAuth } from "@/lib/auth-context";
+import { createClient } from "@/lib/supabase/client";
 
 type ToggleProps = {
   id: string;
@@ -33,7 +35,7 @@ function Toggle({ id, checked, onChange }: ToggleProps) {
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className={`w-11 h-6 rounded-full transition-all duration-300 relative flex-shrink-0 ${checked ? "bg-[#2563EB]" : "bg-[#D1D5DB]"
+      className={`w-11 h-6 rounded-full transition-all duration-300 relative flex-shrink-0 cursor-pointer ${checked ? "bg-[#7C3AED]" : "bg-[#D1D5DB]"
         }`}
     >
       <span
@@ -67,7 +69,7 @@ const settingSections: SettingSection[] = [
     items: [
       { id: "private-account", label: "Private Account", description: "Only followers can see your posts", type: "toggle" },
       { id: "hide-dob", label: "Hide Date of Birth", type: "toggle" },
-      { id: "hide-online", label: "Hide Online Status", type: "toggle" },
+      { id: "hide-online", label: "Hide Online Status (Last Seen)", type: "toggle" },
       { id: "hide-read", label: "Hide Read Receipts", type: "toggle" },
     ],
   },
@@ -123,6 +125,7 @@ const settingSections: SettingSection[] = [
 ];
 
 export default function SettingsPage() {
+  const { profile } = useAuth();
   const [toggles, setToggles] = useState<Record<string, boolean>>({
     "private-account": false,
     "hide-dob": false,
@@ -135,7 +138,52 @@ export default function SettingsPage() {
     "story-everyone": true,
   });
 
-  const flip = (id: string) => setToggles((p) => ({ ...p, [id]: !p[id] }));
+  // Fetch initial profile privacy settings from Supabase
+  useEffect(() => {
+    if (!profile) return;
+    const fetchPrivacySettings = async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("is_private, show_last_seen")
+        .eq("id", profile.id)
+        .single();
+
+      if (data && !error) {
+        setToggles((prev) => ({
+          ...prev,
+          "private-account": !!data.is_private,
+          "hide-online": data.show_last_seen === false, // Hide online is inverse of show_last_seen
+        }));
+      }
+    };
+    fetchPrivacySettings();
+  }, [profile]);
+
+  const flip = async (id: string) => {
+    if (!profile) return;
+    const nextVal = !toggles[id];
+    
+    // Optimistic state update
+    setToggles((p) => ({ ...p, [id]: nextVal }));
+
+    const supabase = createClient();
+    try {
+      if (id === "private-account") {
+        await supabase
+          .from("profiles")
+          .update({ is_private: nextVal })
+          .eq("id", profile.id);
+      } else if (id === "hide-online") {
+        await supabase
+          .from("profiles")
+          .update({ show_last_seen: !nextVal }) // show_last_seen is reverse of hide-online
+          .eq("id", profile.id);
+      }
+    } catch (err) {
+      console.error("Error updating privacy settings:", err);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] max-w-2xl mx-auto">

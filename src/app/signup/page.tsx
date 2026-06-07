@@ -1,37 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Mail, Lock, User, AtSign, Calendar, AlertCircle, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function SignupPage() {
-  const router = useRouter();
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [success, setSuccess] = useState(false);
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-[#2563EB] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <SignupContent />
+    </Suspense>
+  );
+}
 
+function SignupContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextParam = searchParams?.get("next");
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [form, setForm] = useState({
     fullName: "",
     username: "",
     email: "",
     dob: "",
     password: "",
-    confirmPassword: "",
   });
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setForm({ ...form, [e.target.name]: e.target.value });
   };
 
   const passwordStrength = () => {
     const p = form.password;
-    if (p.length === 0) return 0;
+    if (!p) return 0;
     let score = 0;
-    if (p.length >= 8) score++;
+    if (p.length >= 6) score++;
     if (/[A-Z]/.test(p)) score++;
     if (/[0-9]/.test(p)) score++;
     if (/[^A-Za-z0-9]/.test(p)) score++;
@@ -42,11 +54,10 @@ export default function SignupPage() {
     e.preventDefault();
     setErrorMsg("");
 
-    if (form.password !== form.confirmPassword) {
-      setErrorMsg("Passwords do not match");
+    if (form.username.trim().length < 3) {
+      setErrorMsg("Username must be at least 3 characters");
       return;
     }
-
     if (passwordStrength() < 2) {
       setErrorMsg("Please choose a stronger password");
       return;
@@ -93,14 +104,12 @@ export default function SignupPage() {
         });
 
         if (signInError) {
-          // If auto-login fails (e.g. email confirmation required on server),
-          // show success and redirect anyway
           console.warn("Auto-login after signup failed:", signInError.message);
         }
 
         setSuccess(true);
         setTimeout(() => {
-          router.push("/home");
+          router.push(nextParam || "/home");
         }, 1500);
       }
     } catch (err: any) {
@@ -109,10 +118,6 @@ export default function SignupPage() {
       setLoading(false);
     }
   };
-
-  const strengthLabel = ["", "Weak", "Fair", "Good", "Strong"];
-  const strengthColor = ["", "bg-red-400", "bg-yellow-400", "bg-blue-400", "bg-green-500"];
-  const strength = passwordStrength();
 
   if (success) {
     return (
@@ -132,183 +137,175 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#EFF6FF] via-[#F8FAFC] to-[#EDE9FE] flex flex-col items-center justify-center px-6 py-10">
-      {/* Logo */}
+    <div className="min-h-screen bg-gradient-to-br from-[#EFF6FF] via-[#F8FAFC] to-[#EDE9FE] flex flex-col items-center justify-center px-6 py-12">
+      {/* Logo Card */}
       <div className="mb-6 text-center">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-white shadow-lg shadow-blue-100 mb-3">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-lg shadow-blue-100 mb-3">
           <span className="text-3xl font-extrabold text-[#2563EB]">h</span>
         </div>
-        <h1 className="text-2xl font-extrabold text-[#111827]">Join hyp</h1>
-        <p className="text-[#6B7280] text-sm mt-1">Create your account</p>
+        <h1 className="text-2xl font-extrabold text-[#111827] tracking-tight">hyp</h1>
       </div>
 
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl shadow-blue-50 p-8">
+        <h2 className="text-xl font-extrabold text-[#111827] mb-5 text-center">Join hyp</h2>
+
         {errorMsg && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl flex items-start gap-2.5 text-xs text-red-600">
-            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <div className="mb-4 p-3.5 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-2 text-xs font-semibold text-[#EF4444] slide-up">
+            <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
             <span>{errorMsg}</span>
           </div>
         )}
 
-        <form className="flex flex-col gap-3.5" onSubmit={handleSubmit}>
-
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           {/* Full Name */}
-          <div className="relative">
+          <div>
             <label htmlFor="signup-fullname" className="sr-only">Full Name</label>
-            <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-            <input
-              id="signup-fullname"
-              name="fullName"
-              type="text"
-              value={form.fullName}
-              onChange={handleChange}
-              placeholder="Full Name"
-              required
-              className="w-full pl-9 pr-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] transition-all"
-            />
+            <div className="relative">
+              <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+              <input
+                id="signup-fullname"
+                type="text"
+                name="fullName"
+                required
+                value={form.fullName}
+                onChange={handleChange}
+                placeholder="Full Name"
+                className="w-full pl-11 pr-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-2xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] transition-all"
+              />
+            </div>
           </div>
 
           {/* Username */}
-          <div className="relative">
-            <label htmlFor="signup-username" className="sr-only">Username</label>
-            <AtSign size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-            <input
-              id="signup-username"
-              name="username"
-              type="text"
-              value={form.username}
-              onChange={handleChange}
-              placeholder="Username"
-              required
-              className="w-full pl-9 pr-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] transition-all"
-            />
-          </div>
-
-          {/* Email */}
-          <div className="relative">
-            <label htmlFor="signup-email" className="sr-only">Email address</label>
-            <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-            <input
-              id="signup-email"
-              name="email"
-              type="email"
-              value={form.email}
-              onChange={handleChange}
-              placeholder="Email address"
-              required
-              className="w-full pl-9 pr-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] transition-all"
-            />
-          </div>
-
-          {/* Date of Birth */}
-          <div className="relative">
-            <label htmlFor="signup-dob" className="sr-only">Date of Birth</label>
-            <Calendar size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-            <input
-              id="signup-dob"
-              name="dob"
-              type="date"
-              value={form.dob}
-              onChange={handleChange}
-              required
-              className="w-full pl-9 pr-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] transition-all"
-            />
-          </div>
-
-          {/* Password */}
           <div>
+            <label htmlFor="signup-username" className="sr-only">Username</label>
             <div className="relative">
-              <label htmlFor="signup-password" className="sr-only">Password</label>
-              <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+              <AtSign size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+              <input
+                id="signup-username"
+                type="text"
+                name="username"
+                required
+                value={form.username}
+                onChange={handleChange}
+                placeholder="Username (e.g. rahul_k)"
+                className="w-full pl-11 pr-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-2xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Birthday */}
+          <div>
+            <label htmlFor="signup-dob" className="sr-only">Birthday</label>
+            <div className="relative">
+              <Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+              <input
+                id="signup-dob"
+                type="text"
+                name="dob"
+                required
+                value={form.dob}
+                onChange={handleChange}
+                placeholder="Birthday (e.g. August 15, 2002)"
+                className="w-full pl-11 pr-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-2xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Email address */}
+          <div>
+            <label htmlFor="signup-email" className="sr-only">Email address</label>
+            <div className="relative">
+              <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+              <input
+                id="signup-email"
+                type="email"
+                name="email"
+                required
+                value={form.email}
+                onChange={handleChange}
+                placeholder="Email address"
+                className="w-full pl-11 pr-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-2xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Password field */}
+          <div>
+            <label htmlFor="signup-password" className="sr-only">Password</label>
+            <div className="relative">
+              <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
               <input
                 id="signup-password"
-                name="password"
                 type={showPassword ? "text" : "password"}
+                name="password"
+                required
                 value={form.password}
                 onChange={handleChange}
                 placeholder="Password"
-                required
-                className="w-full pl-9 pr-10 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] transition-all"
+                className="w-full pl-11 pr-11 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-2xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] transition-all"
               />
               <button
                 type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#4B5563]"
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            {/* Password strength meter */}
-            {form.password.length > 0 && (
-              <div className="mt-1.5 flex gap-1 items-center">
-                {[1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                      i <= strength ? strengthColor[strength] : "bg-[#E5E7EB]"
-                    }`}
-                  />
-                ))}
-                <span className="text-xs text-[#6B7280] ml-1">{strengthLabel[strength]}</span>
+            {form.password && (
+              <div className="mt-1.5 flex gap-1 items-center px-1">
+                <span className="text-[10px] text-[#9CA3AF] font-bold">Strength:</span>
+                <div className="flex gap-0.5 flex-1">
+                  {[...Array(4)].map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1 flex-1 rounded-full ${
+                        i < passwordStrength()
+                          ? passwordStrength() <= 2
+                            ? "bg-amber-400"
+                            : "bg-green-500"
+                          : "bg-slate-100"
+                      }`}
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
-          {/* Confirm Password */}
-          <div className="relative">
-            <label htmlFor="signup-confirm-password" className="sr-only">Confirm Password</label>
-            <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-            <input
-              id="signup-confirm-password"
-              name="confirmPassword"
-              type={showConfirm ? "text" : "password"}
-              value={form.confirmPassword}
-              onChange={handleChange}
-              placeholder="Confirm Password"
-              required
-              className={`w-full pl-9 pr-10 py-2.5 bg-[#F9FAFB] border rounded-xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#2563EB]/30 transition-all ${
-                form.confirmPassword.length > 0 && form.password !== form.confirmPassword
-                  ? "border-[#EF4444] focus:border-[#EF4444]"
-                  : "border-[#E5E7EB] focus:border-[#2563EB]"
-              }`}
-            />
-            <button
-              type="button"
-              onClick={() => setShowConfirm((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]"
-            >
-              {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-          {form.confirmPassword.length > 0 && form.password !== form.confirmPassword && (
-            <p className="text-xs text-[#EF4444] -mt-2">Passwords do not match</p>
-          )}
-
-          {/* Create Account button */}
+          {/* Submit button */}
           <button
-            id="signup-submit"
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-[#2563EB] hover:bg-[#1D4ED8] active:scale-[0.98] text-white font-semibold rounded-xl transition-all duration-200 mt-1 shadow-md shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full py-3 bg-[#2563EB] hover:bg-[#1D4ED8] active:scale-[0.98] text-white font-semibold text-sm rounded-xl transition-all duration-200 mt-1 shadow-md shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Creating Account...
+                Creating...
               </>
             ) : (
-              "Create Account"
+              "Sign Up"
             )}
           </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-1">
+            <div className="flex-1 h-px bg-[#E5E7EB]" />
+            <span className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider">Already a user?</span>
+            <div className="flex-1 h-px bg-[#E5E7EB]" />
+          </div>
+
+          {/* Link to login */}
+          <Link
+            href={nextParam ? `/login?next=${encodeURIComponent(nextParam)}` : "/login"}
+            className="w-full py-3 bg-[#F3F4F6] hover:bg-[#E5E7EB] text-[#4B5563] font-semibold rounded-xl transition-all duration-200 flex items-center justify-center cursor-pointer text-center text-sm"
+          >
+            Log In
+          </Link>
         </form>
       </div>
-
-      <p className="mt-5 text-sm text-[#6B7280]">
-        Already have an account?{" "}
-        <Link href="/login" className="text-[#2563EB] font-semibold hover:underline">
-          Log In
-        </Link>
-      </p>
     </div>
   );
 }

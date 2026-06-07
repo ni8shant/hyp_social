@@ -36,8 +36,13 @@ export default function SearchPage() {
           .select("id, username, full_name, avatar_url")
           .neq("id", profile.id);
 
-        if (query.trim()) {
-          queryBuilder = queryBuilder.or(`username.ilike.%${query}%,full_name.ilike.%${query}%`);
+        let cleanQuery = query.trim();
+        if (cleanQuery.startsWith("@")) {
+          cleanQuery = cleanQuery.substring(1);
+        }
+
+        if (cleanQuery) {
+          queryBuilder = queryBuilder.or(`username.ilike.%${cleanQuery}%,full_name.ilike.%${cleanQuery}%`);
         }
 
         const { data: profilesData, error: profilesError } = await queryBuilder.limit(20);

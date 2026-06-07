@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { timeAgo } from "@/lib/data";
 
 const assistantMessages = [
   { id: "1", from: "them", text: "Hey! Welcome to Hyp! 🚀 I'm your assistant.", time: "Just now" },
@@ -22,6 +23,8 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [contactName, setContactName] = useState(isAssistant ? "Hyp Assistant" : "Loading...");
   const [contactInitial, setContactInitial] = useState(isAssistant ? "H" : "U");
+  const [lastSeenText, setLastSeenText] = useState(isAssistant ? "Online" : "");
+  const [isOnline, setIsOnline] = useState(isAssistant ? true : false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Fetch contact user details
@@ -31,16 +34,39 @@ export default function ChatPage() {
       const supabase = createClient();
       const { data } = await supabase
         .from("profiles")
-        .select("username, full_name")
+        .select("username, full_name, last_seen, show_last_seen")
         .eq("id", id)
         .single();
       if (data) {
         const name = data.full_name || data.username;
         setContactName(name);
         setContactInitial(name[0].toUpperCase());
+
+        if (data.show_last_seen === false) {
+          setLastSeenText("");
+          setIsOnline(false);
+        } else if (data.last_seen) {
+          const lastSeenDate = new Date(data.last_seen);
+          const diffMs = Date.now() - lastSeenDate.getTime();
+          if (diffMs < 2 * 60 * 1000) {
+            setLastSeenText("Online");
+            setIsOnline(true);
+          } else {
+            const formatted = timeAgo(data.last_seen);
+            setLastSeenText(`Last seen ${formatted}`);
+            setIsOnline(false);
+          }
+        } else {
+          setLastSeenText("Offline");
+          setIsOnline(false);
+        }
       }
     };
     fetchContact();
+
+    // Set up a refresh interval to keep last seen time accurate while chatting
+    const interval = setInterval(fetchContact, 15000);
+    return () => clearInterval(interval);
   }, [id, isAssistant]);
 
   // Load initial messages from DB
@@ -193,11 +219,15 @@ export default function ChatPage() {
           <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${contactColor} flex items-center justify-center text-white font-bold text-sm`}>
             {contactInitial}
           </div>
-          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#22C55E] border-2 border-white" />
+          {isOnline && (
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#22C55E] border-2 border-white" />
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-[#111827] text-sm truncate">{contactName}</p>
-          <p className="text-xs text-[#22C55E]">Online</p>
+          {lastSeenText && (
+            <p className={`text-xs ${isOnline ? "text-[#22C55E]" : "text-[#6B7280]"}`}>{lastSeenText}</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#F3F4F6] text-[#374151] transition-colors" aria-label="Voice call">

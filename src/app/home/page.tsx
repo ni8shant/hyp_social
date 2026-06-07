@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import TopBar from "@/components/TopBar";
 import PostFeed from "@/components/PostFeed";
 import BottomNav from "@/components/BottomNav";
-import { Camera, X, MessageSquare, Plus, Image as ImageIcon } from "lucide-react";
+import { Camera, X, MessageSquare, Plus, Image as ImageIcon, Heart } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import {
   getAllStories,
@@ -33,7 +34,7 @@ export default function HomePage() {
   const [replyInput, setReplyInput] = useState("");
   const [showReplySuccess, setShowReplySuccess] = useState(false);
   const [stories, setStories] = useState<HypStory[]>([]);
-  const [storyAuthors, setStoryAuthors] = useState<ReturnType<typeof getUniqueStoryAuthors>>([]);
+  const [storyAuthors, setStoryAuthors] = useState<Awaited<ReturnType<typeof getUniqueStoryAuthors>>>([]);
 
   // Story creation states
   const [showStoryCreator, setShowStoryCreator] = useState(false);
@@ -86,12 +87,41 @@ export default function HomePage() {
     setShowReplySuccess(false);
   };
 
-  const handleSendReply = (e: React.FormEvent) => {
+  const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyInput.trim()) return;
+    if (!replyInput.trim() || !profile || !currentStory) return;
+
+    const replyText = replyInput.trim();
     setReplyInput("");
     setShowReplySuccess(true);
     setTimeout(() => setShowReplySuccess(false), 3000);
+
+    try {
+      const supabase = createClient();
+      await supabase.from("messages").insert({
+        sender_id: profile.id,
+        receiver_id: currentStory.authorId,
+        content: `Replied to your story: "${replyText}"`
+      });
+    } catch (err) {
+      console.error("Failed to send story reply:", err);
+    }
+  };
+
+  const handleLikeStory = async () => {
+    if (!profile || !currentStory) return;
+    try {
+      const supabase = createClient();
+      await supabase.from("notifications").insert({
+        user_id: currentStory.authorId,
+        actor_id: profile.id,
+        type: "story_reaction",
+      });
+      setShowReplySuccess(true);
+      setTimeout(() => setShowReplySuccess(false), 2000);
+    } catch (err) {
+      console.error("Failed to like story:", err);
+    }
   };
 
   const currentStory = selectedStoryId ? stories.find((s) => s.id === selectedStoryId) : null;
@@ -541,28 +571,38 @@ export default function HomePage() {
 
               {/* Reply Form */}
               {currentStory.authorId !== profile.id && (
-                <form
-                  onSubmit={handleSendReply}
-                  className="flex items-center gap-2 bg-[#F3F4F6] rounded-full border border-[#E5E7EB] px-4 py-2.5 shadow-sm"
-                >
-                  <label htmlFor="modal-reply-input" className="sr-only">Reply to story</label>
-                  <input
-                    id="modal-reply-input"
-                    type="text"
-                    value={replyInput}
-                    onChange={(e) => setReplyInput(e.target.value)}
-                    placeholder={`Reply to @${currentStory.authorUsername}...`}
-                    className="flex-1 bg-transparent text-sm text-[#111827] placeholder-[#9CA3AF] outline-none"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!replyInput.trim()}
-                    className="p-1.5 text-[#2563EB] hover:bg-blue-50 rounded-full transition-colors disabled:opacity-40 cursor-pointer"
-                    aria-label="Send reply"
+                <div className="flex items-center gap-2">
+                  <form
+                    onSubmit={handleSendReply}
+                    className="flex-1 flex items-center gap-2 bg-[#F3F4F6] rounded-full border border-[#E5E7EB] px-4 py-2.5 shadow-sm"
                   >
-                    <MessageSquare size={18} />
+                    <label htmlFor="modal-reply-input" className="sr-only">Reply to story</label>
+                    <input
+                      id="modal-reply-input"
+                      type="text"
+                      value={replyInput}
+                      onChange={(e) => setReplyInput(e.target.value)}
+                      placeholder={`Reply to @${currentStory.authorUsername}...`}
+                      className="flex-1 bg-transparent text-sm text-[#111827] placeholder-[#9CA3AF] outline-none"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!replyInput.trim()}
+                      className="p-1.5 text-[#7C3AED] hover:bg-purple-50 rounded-full transition-colors disabled:opacity-40 cursor-pointer"
+                      aria-label="Send reply"
+                    >
+                      <MessageSquare size={18} />
+                    </button>
+                  </form>
+                  <button
+                    type="button"
+                    onClick={handleLikeStory}
+                    className="p-2.5 bg-red-50 hover:bg-[#EF4444] text-[#EF4444] hover:text-white rounded-full transition-all cursor-pointer shadow-sm"
+                    aria-label="Like story"
+                  >
+                    <Heart size={18} className="stroke-[2.5]" />
                   </button>
-                </form>
+                </div>
               )}
 
               {/* Close button for own stories */}

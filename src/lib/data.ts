@@ -78,28 +78,34 @@ export async function getAllPosts(): Promise<HypPost[]> {
 
     if (error) throw error;
 
-    return (data || []).map((p: any) => ({
-      id: p.id,
-      authorId: p.user_id,
-      authorUsername: p.profiles?.username || "user",
-      authorDisplayName: p.profiles?.full_name || p.profiles?.username || "User",
-      authorInitial: (p.profiles?.full_name || p.profiles?.username || "U")[0].toUpperCase(),
-      content: p.content || "",
-      imageUrl: p.media_url || undefined,
-      postType: p.post_type as "normal" | "life_update",
-      updateType: p.update_type || undefined,
-      likes: p.post_likes?.map((l: any) => l.user_id) || [],
-      comments: (p.comments || [])
-        .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-        .map((c: any) => ({
-          id: c.id,
-          authorId: c.user_id,
-          authorUsername: c.profiles?.username || "user",
-          text: c.content,
-          createdAt: c.created_at,
-        })),
-      createdAt: p.created_at,
-    }));
+    return (data || [])
+      .filter((p: any) => {
+        const idStr = p.id?.toString() || "";
+        const uIdStr = p.user_id?.toString() || "";
+        return !idStr.startsWith("seed_") && !uIdStr.startsWith("user_");
+      })
+      .map((p: any) => ({
+        id: p.id,
+        authorId: p.user_id,
+        authorUsername: p.profiles?.username || "user",
+        authorDisplayName: p.profiles?.full_name || p.profiles?.username || "User",
+        authorInitial: (p.profiles?.full_name || p.profiles?.username || "U")[0].toUpperCase(),
+        content: p.content || "",
+        imageUrl: p.media_url || undefined,
+        postType: p.post_type as "normal" | "life_update",
+        updateType: p.update_type || undefined,
+        likes: p.post_likes?.map((l: any) => l.user_id) || [],
+        comments: (p.comments || [])
+          .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          .map((c: any) => ({
+            id: c.id,
+            authorId: c.user_id,
+            authorUsername: c.profiles?.username || "user",
+            text: c.content,
+            createdAt: c.created_at,
+          })),
+        createdAt: p.created_at,
+      }));
   } catch (err) {
     console.error("Error in getAllPosts:", err);
     return [];
@@ -394,10 +400,20 @@ export function timeAgo(dateStr: string): string {
   const then = new Date(dateStr).getTime();
   const diff = Math.floor((now - then) / 1000);
 
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
+  if (diff < 10) return "just now";
+  if (diff < 60) return `${diff} seconds ago`;
+  
+  const mins = Math.floor(diff / 60);
+  if (mins < 60) return mins === 1 ? "1 minute ago" : `${mins} minutes ago`;
+
+  const hours = Math.floor(diff / 3600);
+  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+
+  const days = Math.floor(diff / 86400);
+  if (days < 30) return days === 1 ? "1 day ago" : `${days} days ago`;
+
+  const months = Math.floor(days / 30);
+  return months === 1 ? "1 month ago" : `${months} months ago`;
 }
 
 // Predefined life update configs (shared with create page)

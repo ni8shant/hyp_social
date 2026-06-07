@@ -90,7 +90,10 @@ export default function MessagesPage() {
   }, [profile]);
 
   const handleCopyInvite = () => {
-    const inviteUrl = typeof window !== "undefined" ? `${window.location.origin}/signup` : "https://hyp.social/signup";
+    const username = profile?.username || "";
+    const inviteUrl = typeof window !== "undefined"
+      ? `${window.location.origin}/profile?u=${username}`
+      : `https://hyp.social/profile?u=${username}`;
     navigator.clipboard.writeText(inviteUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

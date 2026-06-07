@@ -6,6 +6,7 @@ import BottomNav from "@/components/BottomNav";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-context";
+import { timeAgo } from "@/lib/data";
 
 export default function NotificationsPage() {
   const { profile } = useAuth();
@@ -24,6 +25,7 @@ export default function NotificationsPage() {
           type,
           is_read,
           created_at,
+          actor_id,
           actor:profiles!notifications_actor_id_fkey (
             username,
             full_name
@@ -33,7 +35,14 @@ export default function NotificationsPage() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setNotifications(data || []);
+
+      const realNotifications = (data || []).filter((notif: any) => {
+        const actorId = notif.actor_id?.toString() || "";
+        const idStr = notif.id?.toString() || "";
+        return !actorId.startsWith("user_") && !idStr.startsWith("seed_");
+      });
+
+      setNotifications(realNotifications);
     } catch (err) {
       console.error("Failed to load notifications:", err);
     } finally {
@@ -97,16 +106,6 @@ export default function NotificationsPage() {
     }
   };
 
-  const timeAgo = (dateStr: string) => {
-    const now = Date.now();
-    const then = new Date(dateStr).getTime();
-    const diff = Math.floor((now - then) / 1000);
-
-    if (diff < 60) return "just now";
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
-  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] max-w-2xl mx-auto">

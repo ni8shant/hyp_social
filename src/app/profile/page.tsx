@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { SquarePen, Settings, X, Check, Heart, MessageCircle, Plus, Share2, Camera, Sparkles, LogOut } from "lucide-react";
+import { useState, useEffect, Suspense } from "react";
+import { SquarePen, Settings, X, Check, Heart, MessageCircle, Plus, Share2, Camera, Sparkles, LogOut, UserPlus } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import TopBar from "@/components/TopBar";
 import BottomNav from "@/components/BottomNav";
 import { useAuth } from "@/lib/auth-context";
+import { createClient } from "@/lib/supabase/client";
 import {
   getPostsByUser,
   getStoriesByUser,
@@ -18,8 +19,28 @@ import {
 } from "@/lib/data";
 
 export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <ProfileContent />
+    </Suspense>
+  );
+}
+
+function ProfileContent() {
   const { profile, updateProfile, signOut, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const uParam = searchParams?.get("u");
+
+  // State to track if it is own profile or someone else's
+  const [targetUser, setTargetUser] = useState<any>(null);
+  const [isOwnProfile, setIsOwnProfile] = useState(true);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   // UI state
   const [isEditing, setIsEditing] = useState(false);
@@ -38,15 +59,66 @@ export default function ProfilePage() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !profile) {
-      router.push("/login");
+      const currentUrl = typeof window !== "undefined" ? window.location.search : "";
+      router.push(`/login?next=/profile${currentUrl}`);
     }
   }, [authLoading, profile, router]);
 
-  // Load user data
+  // Load target user or current user
+  useEffect(() => {
+    if (authLoading) return;
+    if (!profile) return;
+
+    const loadProfileData = async () => {
+      const supabase = createClient();
+      if (uParam && uParam !== profile.username) {
+        setIsOwnProfile(false);
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("username", uParam)
+          .single();
+
+        if (data && !error) {
+          const fullName = data.full_name || data.username;
+          const target = {
+            id: data.id,
+            username: data.username,
+            fullName: fullName,
+            dob: data.dob || "",
+            about: data.bio || "Hey, I'm on hyp! ✨",
+            avatarInitial: fullName[0]?.toUpperCase() || "U",
+          };
+          setTargetUser(target);
+
+          // Check if already following
+          const { data: followData } = await supabase
+            .from("follows")
+            .select("status")
+            .eq("follower_id", profile.id)
+            .eq("following_id", data.id)
+            .maybeSingle();
+
+          setIsFollowing(!!followData);
+        } else {
+          setIsOwnProfile(true);
+          setTargetUser(profile);
+        }
+      } else {
+        setIsOwnProfile(true);
+        setTargetUser(profile);
+      }
+    };
+
+    loadProfileData();
+  }, [uParam, profile, authLoading]);
+
+  // Load user data (posts/stories)
   const refreshData = async () => {
-    if (profile) {
-      const uPosts = await getPostsByUser(profile.id);
-      const uStories = await getStoriesByUser(profile.id);
+    const userToLoad = targetUser || profile;
+    if (userToLoad) {
+      const uPosts = await getPostsByUser(userToLoad.id);
+      const uStories = await getStoriesByUser(userToLoad.id);
       setPosts(uPosts);
       setStories(uStories);
     }
@@ -58,15 +130,57 @@ export default function ProfilePage() {
     window.addEventListener("hyp_data_change", handler);
     return () => window.removeEventListener("hyp_data_change", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.id]);
+  }, [targetUser?.id, profile?.id]);
 
-  if (authLoading || !profile) {
+  if (authLoading || !profile || !targetUser) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
+
+  const handleFollowToggle = async () => {
+    if (!profile || !targetUser || followLoading) return;
+    setFollowLoading(true);
+    const supabase = createClient();
+    try {
+      if (isFollowing) {
+        // Unfollow
+        const { error } = await supabase
+          .from("follows")
+          .delete()
+          .eq("follower_id", profile.id)
+          .eq("following_id", targetUser.id);
+        if (!error) {
+          setIsFollowing(false);
+        }
+      } else {
+        // Follow
+        const { error } = await supabase
+          .from("follows")
+          .insert({
+            follower_id: profile.id,
+            following_id: targetUser.id,
+            status: "accepted"
+          });
+        if (!error) {
+          setIsFollowing(true);
+
+          // Trigger follow notification
+          await supabase.from("notifications").insert({
+            user_id: targetUser.id,
+            actor_id: profile.id,
+            type: "follow",
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error toggling follow status:", err);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,6 +226,8 @@ export default function ProfilePage() {
     router.push("/login");
   };
 
+  const activeUser = targetUser || profile;
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] max-w-4xl mx-auto relative md:px-12">
       <TopBar showSearch={true} />
@@ -124,10 +240,10 @@ export default function ProfilePage() {
             {/* Left Section: Avatar & username */}
             <div className="flex flex-col items-center gap-2 flex-shrink-0">
               <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#7C3AED] to-pink-500 flex items-center justify-center text-white font-extrabold text-3xl shadow-md border-2 border-white ring-4 ring-[#7C3AED]/10">
-                {profile.avatarInitial}
+                {activeUser.avatarInitial}
               </div>
               <span className="text-xs font-bold text-[#4B5563] tracking-wide bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/60 shadow-inner">
-                @{profile.username}
+                @{activeUser.username}
               </span>
             </div>
 
@@ -135,62 +251,82 @@ export default function ProfilePage() {
             <div className="flex-1 space-y-3 pt-1 pl-4 min-w-0">
               <div className="border-b border-slate-50 pb-1">
                 <p className="text-[10px] text-[#94A3B8] font-extrabold uppercase tracking-widest mb-0.5">Name</p>
-                <p className="text-base font-extrabold text-[#111827] truncate">{profile.fullName}</p>
+                <p className="text-base font-extrabold text-[#111827] truncate">{activeUser.fullName}</p>
               </div>
               <div className="border-b border-slate-50 pb-1">
                 <p className="text-[10px] text-[#94A3B8] font-extrabold uppercase tracking-widest mb-0.5">DOB</p>
-                <p className="text-xs font-semibold text-[#4B5563]">{profile.dob || "Not set"}</p>
+                <p className="text-xs font-semibold text-[#4B5563]">{activeUser.dob || "Not set"}</p>
               </div>
               <div>
                 <p className="text-[10px] text-[#94A3B8] font-extrabold uppercase tracking-widest mb-0.5">About</p>
-                <p className="text-xs font-medium text-[#4B5563] leading-relaxed break-words">{profile.about}</p>
+                <p className="text-xs font-medium text-[#4B5563] leading-relaxed break-words">{activeUser.about}</p>
               </div>
             </div>
 
             {/* Right Section: Action Buttons */}
-            <div className="flex flex-col items-center gap-3.5 flex-shrink-0">
-              <button
-                id="edit-profile-btn"
-                onClick={() => {
-                  setTempProfile({
-                    fullName: profile.fullName,
-                    dob: profile.dob,
-                    about: profile.about,
-                  });
-                  setIsEditing(true);
-                }}
-                className="p-2.5 bg-slate-50 hover:bg-slate-100 text-[#4B5563] hover:text-[#7C3AED] rounded-2xl border border-slate-200 shadow-sm transition-all duration-200 cursor-pointer"
-                aria-label="Edit Profile"
-              >
-                <SquarePen size={18} className="stroke-[2.2]" />
-              </button>
-              
-              <Link
-                href="/settings"
-                className="p-2.5 bg-slate-50 hover:bg-slate-100 text-[#4B5563] hover:text-[#7C3AED] rounded-2xl border border-slate-200 shadow-sm transition-all duration-200 cursor-pointer"
-                aria-label="Settings"
-              >
-                <Settings size={18} className="stroke-[2.2]" />
-              </Link>
+            {isOwnProfile ? (
+              <div className="flex flex-col items-center gap-3.5 flex-shrink-0">
+                <button
+                  id="edit-profile-btn"
+                  onClick={() => {
+                    setTempProfile({
+                      fullName: profile.fullName,
+                      dob: profile.dob,
+                      about: profile.about,
+                    });
+                    setIsEditing(true);
+                  }}
+                  className="p-2.5 bg-slate-50 hover:bg-slate-100 text-[#4B5563] hover:text-[#7C3AED] rounded-2xl border border-slate-200 shadow-sm transition-all duration-200 cursor-pointer"
+                  aria-label="Edit Profile"
+                >
+                  <SquarePen size={18} className="stroke-[2.2]" />
+                </button>
+                
+                <Link
+                  href="/settings"
+                  className="p-2.5 bg-slate-50 hover:bg-slate-100 text-[#4B5563] hover:text-[#7C3AED] rounded-2xl border border-slate-200 shadow-sm transition-all duration-200 cursor-pointer"
+                  aria-label="Settings"
+                >
+                  <Settings size={18} className="stroke-[2.2]" />
+                </Link>
 
-              <button
-                onClick={handleSignOut}
-                className="p-2.5 bg-red-50 hover:bg-red-100 text-red-400 hover:text-red-600 rounded-2xl border border-red-100 shadow-sm transition-all duration-200 cursor-pointer"
-                aria-label="Sign Out"
-              >
-                <LogOut size={18} className="stroke-[2.2]" />
-              </button>
-            </div>
+                <button
+                  onClick={handleSignOut}
+                  className="p-2.5 bg-red-50 hover:bg-red-100 text-red-400 hover:text-red-600 rounded-2xl border border-red-100 shadow-sm transition-all duration-200 cursor-pointer"
+                  aria-label="Sign Out"
+                >
+                  <LogOut size={18} className="stroke-[2.2]" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center flex-shrink-0">
+                <button
+                  onClick={handleFollowToggle}
+                  disabled={followLoading}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-bold transition-all duration-200 cursor-pointer ${
+                    isFollowing
+                      ? "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200"
+                      : "bg-[#7C3AED] text-white hover:bg-[#6D28D9] shadow-md shadow-violet-200"
+                  }`}
+                >
+                  {isFollowing ? "Following" : <><UserPlus size={12} /> Follow</>}
+                </button>
+              </div>
+            )}
 
           </div>
         </div>
 
-        {/* Your Stories Section */}
+        {/* Stories Section */}
         <div className="mb-6">
-          <h2 className="text-sm font-semibold text-[#4B5563] mb-3 pl-1">Your stories</h2>
+          <h2 className="text-sm font-semibold text-[#4B5563] mb-3 pl-1">
+            {isOwnProfile ? "Your stories" : `${activeUser.fullName}'s stories`}
+          </h2>
           {stories.length === 0 ? (
             <div className="text-center py-6 bg-slate-50 rounded-2xl border border-slate-100">
-              <p className="text-xs text-[#9CA3AF]">No active stories. Share one from the home page!</p>
+              <p className="text-xs text-[#9CA3AF]">
+                {isOwnProfile ? "No active stories. Share one from the home page!" : "No active stories."}
+              </p>
             </div>
           ) : (
             <div className="flex gap-4 overflow-x-auto no-scrollbar items-center py-1">
@@ -213,32 +349,38 @@ export default function ProfilePage() {
                 </button>
               ))}
 
-              <Link
-                href="/home"
-                className="flex flex-col items-center gap-2 flex-shrink-0 group cursor-pointer"
-              >
-                <div className="w-[66px] h-[66px] rounded-full border-2 border-dashed border-[#9CA3AF] flex items-center justify-center text-[#4B5563] hover:bg-slate-100 hover:border-[#7C3AED] hover:text-[#7C3AED] transition-all duration-200">
-                  <Plus size={20} />
-                </div>
-                <span className="text-[10px] text-[#9CA3AF] font-bold">New</span>
-              </Link>
+              {isOwnProfile && (
+                <Link
+                  href="/home"
+                  className="flex flex-col items-center gap-2 flex-shrink-0 group cursor-pointer"
+                >
+                  <div className="w-[66px] h-[66px] rounded-full border-2 border-dashed border-[#9CA3AF] flex items-center justify-center text-[#4B5563] hover:bg-slate-100 hover:border-[#7C3AED] hover:text-[#7C3AED] transition-all duration-200">
+                    <Plus size={20} />
+                  </div>
+                  <span className="text-[10px] text-[#9CA3AF] font-bold">New</span>
+                </Link>
+              )}
             </div>
           )}
         </div>
 
-        {/* Your Posts Section */}
+        {/* Posts Section */}
         <div className="mb-8">
-          <h2 className="text-sm font-semibold text-[#4B5563] mb-3 pl-1">Your posts</h2>
+          <h2 className="text-sm font-semibold text-[#4B5563] mb-3 pl-1">
+            {isOwnProfile ? "Your posts" : `${activeUser.fullName}'s posts`}
+          </h2>
           {posts.length === 0 ? (
             <div className="text-center py-8 bg-slate-50 rounded-2xl border border-slate-100">
               <Camera size={28} className="text-[#9CA3AF] mx-auto mb-2" />
-              <p className="text-xs text-[#9CA3AF]">No posts yet. Create your first one!</p>
-              <Link
-                href="/create"
-                className="inline-block mt-3 px-5 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold rounded-xl transition-all shadow-sm"
-              >
-                Create Post
-              </Link>
+              <p className="text-xs text-[#9CA3AF]">No posts yet.</p>
+              {isOwnProfile && (
+                <Link
+                  href="/create"
+                  className="inline-block mt-3 px-5 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+                >
+                  Create Post
+                </Link>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-3.5">
@@ -350,153 +492,125 @@ export default function ProfilePage() {
                   <label htmlFor="edit-about" className="text-xs font-bold text-[#4B5563] block mb-1">About Bio</label>
                   <textarea
                     id="edit-about"
-                    rows={3}
                     value={tempProfile.about}
                     onChange={(e) => setTempProfile({ ...tempProfile, about: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED] transition-all resize-none"
+                    rows={4}
+                    maxLength={200}
+                    className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-sm text-[#111827] placeholder-[#9CA3AF] outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED] transition-all resize-none animate-none"
                     required
                   />
+                  <span className="text-[10px] text-[#9CA3AF] block text-right mt-1">{tempProfile.about.length}/200</span>
                 </div>
 
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(false)}
-                    className="flex-1 py-3 border border-slate-200 rounded-xl text-sm font-bold text-[#6B7280] hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 bg-[#7C3AED] hover:bg-[#6D28D9] rounded-xl text-sm font-extrabold text-white transition-all cursor-pointer shadow-md shadow-violet-200"
-                  >
-                    Save Changes
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-violet-200 mt-2 cursor-pointer"
+                >
+                  Save Updates
+                </button>
               </div>
             )}
           </form>
         </div>
       )}
 
-      {/* Story Player Modal */}
+      {/* Story Viewer Modal */}
       {activeStory && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl slide-up flex flex-col justify-between p-5">
-            <div className={`aspect-[9/16] rounded-2xl bg-gradient-to-br ${activeStory.bg} p-6 text-white flex flex-col justify-between shadow-lg relative overflow-hidden`}>
-              {/* Progress bars */}
-              <div className="flex gap-1.5 w-full absolute top-3 left-0 px-6">
-                <div className="h-1 flex-1 bg-white rounded-full overflow-hidden">
-                  <div className="h-full bg-white w-full" />
-                </div>
-                <div className="h-1 flex-1 bg-white rounded-full overflow-hidden">
-                  <div className="h-full bg-white animate-[pulse_1s_infinite]" />
-                </div>
-                <div className="h-1 flex-1 bg-white/30 rounded-full" />
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col justify-between p-4">
+          
+          {/* Header */}
+          <div className="flex items-center justify-between mt-3 text-white z-10 px-2">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-white/20 border border-white/30 flex items-center justify-center font-bold text-sm">
+                {activeStory.authorInitial}
               </div>
-
-              <div className="flex items-center justify-between mt-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-white/20 border border-white/30 flex items-center justify-center font-black text-sm">
-                    {profile.avatarInitial}
-                  </div>
-                  <div>
-                    <p className="text-sm font-black">@{profile.username}</p>
-                    <p className="text-[10px] opacity-75">{timeAgo(activeStory.createdAt)}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setActiveStory(null)}
-                  className="w-7 h-7 bg-black/20 hover:bg-black/40 rounded-full flex items-center justify-center transition-colors cursor-pointer"
-                  aria-label="Close Story"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-
-              <div className="my-auto text-center px-4">
-                {activeStory.imageUrl && (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={activeStory.imageUrl} alt="Story" className="w-full rounded-xl mb-3 max-h-64 object-cover" />
-                )}
-                {activeStory.text && (
-                  <p className="text-xl font-extrabold leading-snug drop-shadow-md">
-                    &ldquo;{activeStory.text}&rdquo;
-                  </p>
-                )}
-              </div>
-
-              <div className="text-center text-[10px] font-bold text-white/80 bg-white/10 backdrop-blur-sm border border-white/25 rounded-full py-1.5 px-3 flex items-center justify-center gap-1.5">
-                <Sparkles size={11} className="text-amber-300 animate-spin" />
-                <span>Your story</span>
+              <div>
+                <p className="text-sm font-bold">@{activeStory.authorUsername}</p>
+                <p className="text-[10px] opacity-75">{timeAgo(activeStory.createdAt)}</p>
               </div>
             </div>
+            <button
+              onClick={() => setActiveStory(null)}
+              className="w-8 h-8 bg-white/10 hover:bg-white/25 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+              aria-label="Close story"
+            >
+              <X size={16} />
+            </button>
+          </div>
 
-            <div className="flex items-center gap-3 mt-4 pt-1 border-t border-slate-100">
-              <button
-                onClick={() => setActiveStory(null)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-xs font-extrabold text-[#374151] rounded-xl transition-colors cursor-pointer"
-              >
-                Close
-              </button>
+          {/* Body */}
+          <div className="my-auto max-w-sm w-full mx-auto aspect-[9/16] rounded-3xl bg-gradient-to-br from-[#1E293B] to-[#0F172A] border border-slate-800 shadow-2xl relative overflow-hidden flex flex-col justify-between p-6">
+            <div className={`absolute inset-0 bg-gradient-to-br ${activeStory.bg} opacity-90`} />
+            
+            {activeStory.imageUrl && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={activeStory.imageUrl} alt="Story content" className="w-full h-full object-cover rounded-2xl absolute inset-0 z-0" />
+            )}
+
+            <div className="my-auto text-center px-4 z-10 text-white">
+              <p className="text-xl font-extrabold leading-snug drop-shadow-md">
+                &ldquo;{activeStory.text}&rdquo;
+              </p>
             </div>
           </div>
+
+          {/* Footer Spacer */}
+          <div className="h-6" />
+
         </div>
       )}
 
-      {/* Post Detail Lightbox */}
+      {/* Post Viewer Detail Modal */}
       {activePost && (
-        <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-[2rem] p-6 slide-up shadow-2xl border border-slate-100 flex flex-col gap-4 max-h-[85vh]">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl slide-up p-5 flex flex-col gap-4 max-h-[85vh]">
             
+            {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#7C3AED] to-pink-500 text-white font-extrabold text-sm flex items-center justify-center">
-                  {profile.avatarInitial}
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[#111827]">
-                    {activePost.postType === "life_update" ? "Life Update" : "Post"}
-                  </h3>
-                  <p className="text-[10px] text-[#9CA3AF]">@{profile.username}</p>
-                </div>
+              <div>
+                <h3 className="font-extrabold text-[#111827] text-sm">@{activeUser.username}</h3>
+                <p className="text-[9px] text-[#94A3B8] font-bold uppercase tracking-wider mt-0.5">{timeAgo(activePost.createdAt)}</p>
               </div>
               <button
-                onClick={() => {
-                  setActivePost(null);
-                  setNewComment("");
-                }}
-                className="text-[#9CA3AF] hover:text-[#4B5563] p-1.5 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-                aria-label="Close Lightbox"
+                onClick={() => setActivePost(null)}
+                className="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+                aria-label="Close Detail"
               >
-                <X size={16} />
+                <X size={14} />
               </button>
             </div>
 
-            <div className={`aspect-[16/10] rounded-2xl p-5 flex flex-col justify-between border border-slate-200/50 shadow-inner relative overflow-hidden ${
+            {/* Content Display */}
+            <div className={`aspect-[4/3] rounded-2xl p-6 text-center flex flex-col items-center justify-center gap-4 ${
               activePost.postType === "life_update" && activePost.updateGradient
                 ? `bg-gradient-to-br ${activePost.updateGradient} text-white`
-                : "bg-gradient-to-br from-blue-500/20 via-indigo-500/30 to-violet-500/40"
+                : "bg-slate-50 text-[#374151] border border-slate-100"
             }`}>
-              <div className="absolute top-3 right-3 text-[10px] font-bold text-slate-500/80 bg-white/70 backdrop-blur-md border px-2 py-0.5 rounded-full">
+              {activePost.postType === "life_update" && activePost.updateEmoji && (
+                <span className="text-4xl animate-bounce">{activePost.updateEmoji}</span>
+              )}
+              {activePost.imageUrl && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={activePost.imageUrl} alt="Post detail" className="max-h-24 rounded-lg object-cover mb-1" />
+              )}
+              <p className="text-sm font-extrabold leading-relaxed">
+                &ldquo;{activePost.content}&rdquo;
+              </p>
+            </div>
+
+            {/* Like interaction */}
+            <div className="flex justify-between items-center bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
+              <span className="text-xs font-bold text-[#4B5563]">
                 {activePost.likes.length} Likes
-              </div>
-              <div className="my-auto text-center px-4">
-                {activePost.imageUrl && (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={activePost.imageUrl} alt="Post" className="w-full max-h-32 object-cover rounded-xl mb-2" />
-                )}
-                <p className={`text-base font-extrabold leading-relaxed ${
-                  activePost.postType === "life_update" ? "text-white" : "text-[#374151]"
-                }`}>
-                  &ldquo;{activePost.content}&rdquo;
-                </p>
-              </div>
+              </span>
               <button
                 onClick={() => handleLikePost(activePost.id)}
-                className="self-center bg-white/90 hover:bg-white text-[#EF4444] px-4 py-1.5 rounded-full text-xs font-bold shadow-sm border flex items-center gap-1.5 hover:scale-105 transition-all cursor-pointer"
+                className={`text-xs font-bold px-4 py-1.5 rounded-lg transition-all ${
+                  activePost.likes.includes(profile.id)
+                    ? "bg-red-50 text-red-500"
+                    : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                }`}
               >
-                <Heart size={13} className={activePost.likes.includes(profile.id) ? "fill-[#EF4444]" : ""} />
                 {activePost.likes.includes(profile.id) ? "Liked" : "Like Post"}
               </button>
             </div>
